@@ -16,3 +16,7 @@ Bad unfinished cross-compat library for parsing Apple Archive
 
 - macOS
 - Linux
+
+# NOTE
+
+This is not a reimplementation of libAppleArchive, rather it's own library, created from the ground up. It is not compatible with libAppleArchive APIs, look at the header and code for clues.
