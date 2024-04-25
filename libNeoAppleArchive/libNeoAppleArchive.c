@@ -265,7 +265,6 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         }
         if (typEntryType == 'D') {
             /* Header for directory */
-            printf("directoryName: %s\n",pathName);
             mkdir(pathName, accessMode);
             stat(pathName, &st);
             uid_t fileUid = st.st_uid;
@@ -382,7 +381,7 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
         NEO_AA_ErrorHeapAlloc();
         return 0;
     }
-    memset(archiveItem, 0, sizeof(struct neo_aa_header_impl));
+    memset(archiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
     archiveItem->header = header;
     srand((unsigned int)time(NULL));
     int heapCookie = rand();
@@ -560,7 +559,6 @@ void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char 
 }
 
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
-    printf("neo_aa_archive_item_destroy called\n");
     NeoAAHeader header = item->header;
     item->header = 0;
     neo_aa_header_destroy(header);

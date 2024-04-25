@@ -23,7 +23,6 @@ NeoAAHeader neo_aa_header_create(void) {
     header->encodedData = headerData;
     header->fieldCount = 0;
     header->headerSize = default_header_size;
-    /* When adding keys, we don't want to realloc() a non-NULL pointer */
     header->fieldKeys = 0;
     return header;
 }
@@ -39,7 +38,6 @@ void neo_aa_header_destroy(NeoAAHeader header) {
     header->fieldKeySizes = 0;
     free(fieldKeySizes);
     uint32_t *fieldKeys = header->fieldKeys;
-    printf("freeing fieldKeys: %p\n",fieldKeys);
     header->fieldKeys = 0;
     free(fieldKeys);
     char *fieldTypes = header->fieldTypes;
