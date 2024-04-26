@@ -547,7 +547,6 @@ void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char 
     NEO_AA_NullParamAssert(plainArchive);
     NEO_AA_NullParamAssert(filepath);
     internal_do_not_call_neo_aa_archive_plain_assert_heap_cookie(plainArchive);
-    return;
     FILE *fp = fopen(filepath, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");

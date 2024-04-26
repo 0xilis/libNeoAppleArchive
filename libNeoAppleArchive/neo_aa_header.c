@@ -273,7 +273,7 @@ size_t neo_aa_header_get_field_size(NeoAAHeader header, int index) {
 void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
     NEO_AA_NullParamAssert(header);
     internal_do_not_call_is_field_key_available(key);
-    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_UINT, fieldSize));
+    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize));
     size_t oldSize = header->headerSize;
     size_t newSize = oldSize + 4 + fieldSize;
     char *encodedData = header->encodedData;
@@ -306,8 +306,9 @@ void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
     uint16_t newSizeDowncast = (uint16_t)newSize;
     /* Update encodedData with new size */
     memcpy(newEncodedData + 4, &newSizeDowncast, 2);
-    memcpy(newEncodedData + oldSize, &key, 4);
-    newEncodedData[oldSize + 3] = internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(NEO_AA_FIELD_TYPE_UINT, fieldSize);
+    uint32_t dumbPatchworkFix = FLIP_32(key);
+    memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
+    newEncodedData[oldSize + 3] = internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(fieldType, fieldSize);
     memcpy(newEncodedData + oldSize + 4, &value, fieldSize);
     header->encodedData = newEncodedData;
     header->headerSize = newSize;
@@ -418,7 +419,8 @@ void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t str
     uint16_t newSizeDowncast = (uint16_t)newSize;
     /* Update encodedData with new size */
     memcpy(newEncodedData + 4, &newSizeDowncast, 2);
-    memcpy(newEncodedData + oldSize, &key, 4);
+    uint32_t dumbPatchworkFix = FLIP_32(key);
+    memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
     newEncodedData[oldSize + 3] = 'P';
     memcpy(newEncodedData + oldSize + 4, &stringSize, 2);
     strncpy(newEncodedData + oldSize + 6, s, stringSize);
