@@ -16,36 +16,13 @@
 #include <sys/xattr.h>
 #include <time.h>
 
-/*
- * Ugly warning:
- *
- * To help prevent heap overflows,
- * I integrate something into my structs
- * I'd like to refer to as "HSP".
- * Example, when a NeoAAArchiveItem is
- * created, it calls rand() to generate
- * a random 32bit integer for the
- * archiveItemIdentifier, the heap cookie.
- * We then fill the NeoAAHeaders with
- * the heap cookie, and when we have
- * the NeoAAArchiveItem mess with something,
- * it checks and ensures that the heap cookie
- * matches on the NeoAAArchiveItem and its
- * corresponding NeoAAHeader.
- */
 struct neo_aa_header_impl {
-    int archiveItemIdentifier_0;
     uint32_t fieldCount;
     char *encodedData;
-    int archiveItemIdentifier_1;
     uint32_t *fieldKeys;
-    int archiveItemIdentifier_2;
     char *fieldTypes;
-    int archiveItemIdentifier_3;
     void **fieldValues;
-    int archiveItemIdentifier_4;
     size_t *fieldKeySizes;
-    int archiveItemIdentifier_5;
     size_t headerSize;
 };
 
@@ -64,14 +41,9 @@ typedef struct neo_aa_header_impl * NeoAAHeader;
 
 /* Do not manually access items of neo_aa_archive_item_impl !!! They are subject to change!!! */
 struct neo_aa_archive_item_impl {
-    int archivePlainIdentifier_0;
     NeoAAHeader header;
-    int archivePlainIdentifier_1;
     char *encodedBlobData;
-    int archivePlainIdentifier_2;
     size_t encodedBlobDataSize;
-    int archivePlainIdentifier_3;
-    int archiveItemIdentifier;
 };
 
 typedef struct neo_aa_archive_item_impl *NeoAAArchiveItem;
@@ -80,7 +52,6 @@ typedef struct neo_aa_archive_item_impl *NeoAAArchiveItem;
 struct neo_aa_archive_plain_impl {
     int itemCount;
     NeoAAArchiveItem *items;
-    int archivePlainIdentifier;
 };
 
 typedef struct neo_aa_archive_plain_impl *NeoAAArchivePlain;

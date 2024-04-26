@@ -383,10 +383,6 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     }
     memset(archiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
     archiveItem->header = header;
-    srand((unsigned int)time(NULL));
-    int heapCookie = rand();
-    internal_do_not_call_neo_aa_header_fill_heap_cookies(header, heapCookie);
-    archiveItem->archiveItemIdentifier = heapCookie;
     return archiveItem;
 }
 
@@ -395,7 +391,6 @@ void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t
     NEO_AA_NullParamAssert(item);
     NEO_AA_NullParamAssert(data);
     NEO_AA_NullParamAssert(dataSize);
-    internal_do_not_call_neo_aa_archive_item_assert_heap_cookie(item);
     char *encodedBlobData = item->encodedBlobData;
     if (encodedBlobData) {
         /* Zero out item->encodedBlobData BEFORE we free it to prevent weird UaF race threading issues */
@@ -413,22 +408,17 @@ void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount) {
     NEO_AA_NullParamAssert(items);
     NEO_AA_NullParamAssert(itemCount);
-    srand((unsigned int)time(NULL));
-    int heapCookie = rand();
     NeoAAArchivePlain plainArchive = malloc(sizeof(struct neo_aa_archive_plain_impl));
     if (!plainArchive) {
         NEO_AA_ErrorHeapAlloc();
         return 0;
     }
     memset(plainArchive, 0, sizeof(struct neo_aa_archive_plain_impl));
-    plainArchive->archivePlainIdentifier = heapCookie;
     NeoAAArchiveItem *copiedItems = malloc(sizeof(NeoAAArchiveItem) * itemCount);
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem archiveItem = items[i];
-        internal_do_not_call_neo_aa_archive_item_assert_heap_cookie(archiveItem);
         char *encodedBlobData = archiveItem->encodedBlobData;
         size_t encodedBlobDataSize = archiveItem->encodedBlobDataSize;
-        int archiveItemIdentifier = archiveItem->archiveItemIdentifier;
         NeoAAArchiveItem copiedArchiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
         if (!copiedArchiveItem) {
             free(plainArchive);
@@ -443,7 +433,6 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
             NEO_AA_LogError("cloning header in list failed\n");
             return 0;
         }
-        internal_do_not_call_neo_aa_header_fill_heap_cookies(copiedHeader, archiveItemIdentifier);
         copiedArchiveItem->header = copiedHeader;
         if (encodedBlobDataSize) {
             char *copiedEncodedBlobData = malloc(encodedBlobDataSize);
@@ -459,8 +448,6 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
             copiedArchiveItem->encodedBlobData = copiedEncodedBlobData;
             copiedArchiveItem->encodedBlobDataSize = encodedBlobDataSize;
         }
-        copiedArchiveItem->archiveItemIdentifier = archiveItemIdentifier;
-        internal_do_not_call_neo_aa_archive_item_fill_heap_cookies(copiedArchiveItem, heapCookie);
         copiedItems[i] = copiedArchiveItem;
     }
     plainArchive->items = copiedItems;
@@ -525,7 +512,6 @@ void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer) {
 
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
     NEO_AA_NullParamAssert(plainArchive);
-    internal_do_not_call_neo_aa_archive_plain_assert_heap_cookie(plainArchive);
     /* Ugly slow */
     size_t archiveSize = neo_aa_archive_plain_outfile_size(plainArchive);
     /* Now we know what the archive size will be, create it. */
@@ -546,7 +532,6 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath) {
     NEO_AA_NullParamAssert(plainArchive);
     NEO_AA_NullParamAssert(filepath);
-    internal_do_not_call_neo_aa_archive_plain_assert_heap_cookie(plainArchive);
     FILE *fp = fopen(filepath, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");

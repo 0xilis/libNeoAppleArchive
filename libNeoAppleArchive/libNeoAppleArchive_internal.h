@@ -35,9 +35,5 @@ void internal_do_not_call_apply_xattr_blob_to_path(uint8_t *blob, size_t blobSiz
 void internal_do_not_call_is_field_key_available(uint32_t key);
 int internal_do_not_call_is_field_type_supported_size(NeoAAFieldType fieldType, size_t fieldSize);
 char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t fieldType, size_t fieldSize);
-void internal_do_not_call_neo_aa_archive_item_assert_heap_cookie(NeoAAArchiveItem item);
-void internal_do_not_call_neo_aa_header_fill_heap_cookies(NeoAAHeader header, int heapCookie);
-void internal_do_not_call_neo_aa_archive_plain_assert_heap_cookie(NeoAAArchivePlain plainArchive);
-void internal_do_not_call_neo_aa_archive_item_fill_heap_cookies(NeoAAArchiveItem item, int heapCookie);
 
 #endif /* neo_aa_header_h */
