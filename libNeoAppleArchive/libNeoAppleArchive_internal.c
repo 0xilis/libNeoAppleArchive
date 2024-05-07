@@ -25,6 +25,20 @@ char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
     fseek(fp, 0, SEEK_SET);
     lastLoadedBinarySize_internal_do_not_use = binary_size;
     char *aeaShortcutArchive = malloc(binary_size * sizeof(char));
+    /*
+     * Explained better in comment below, but
+     * a process may write to a file while
+     * this is going on so binary_size would be
+     * bigger than the bytes we copy,
+     * making it hit EOF before binary_size
+     * is hit. This means that potentially
+     * other memory from the process may
+     * be kept here. To prevent this,
+     * we 0 out our buffer to make sure
+     * it doesn't contain any leftover memory
+     * left.
+     */
+    memset(aeaShortcutArchive, 0, binary_size * sizeof(char));
     /* copy bytes to binary, byte by byte... */
     int c;
     size_t n = 0;
