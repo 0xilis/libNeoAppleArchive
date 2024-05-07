@@ -29,6 +29,22 @@ char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
     int c;
     size_t n = 0;
     while ((c = fgetc(fp)) != EOF) {
+        if (n > binary_size) {
+            /*
+             * If, at any point, a file is modified during / before copy,
+             * ex it has a really small size, but another process
+             * quickly modifies it after binary_size is saved but
+             * before / during the bytes are copied to the buffer,
+             * then it would go past the buffer, resulting
+             * in a heap overflow from our race. Fixing this
+             * problem by checking if n ever reaches past
+             * the initial binary_size...
+             */
+            free(aeaShortcutArchive);
+            fclose(fp);
+            NEO_AA_LogError("reached past binarySize\n");
+            return 0;
+        }
         aeaShortcutArchive[n++] = (char) c;
     }
     fclose(fp);
