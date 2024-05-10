@@ -24,6 +24,7 @@ struct neo_aa_header_impl {
     void **fieldValues;
     size_t *fieldKeySizes;
     size_t headerSize;
+    void *archiveItem; /* The NeoAAArchiveItem associated with this header, having this pointer */
 };
 
 typedef uint32_t NeoAAFieldType;
@@ -69,6 +70,8 @@ void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer);
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd);
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath);
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item);
+NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data);
+NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSize, uint8_t *data);
 
 void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath);
 
@@ -85,5 +88,6 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 
 #include "libNeoAppleArchive_internal.h"
 #include "neo_aa_header.h"
+/* #include "neo_aea_archive.h" */
 
 #endif

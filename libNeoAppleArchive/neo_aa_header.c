@@ -24,12 +24,24 @@ NeoAAHeader neo_aa_header_create(void) {
     header->fieldCount = 0;
     header->headerSize = default_header_size;
     header->fieldKeys = 0;
+    header->archiveItem = 0;
     return header;
 }
 
 void neo_aa_header_destroy(NeoAAHeader header) {
     if (!header) {
         return;
+    }
+    /*
+     * If NeoAAHeader has a NeoAAArchiveItem on it, 0 us
+     * out on the header. This protects against people
+     * mis-using the library and calling neo_aa_header_destroy
+     * but having the NeoAAArchiveItem be used for some
+     * reason and still having the pointer for the freed header.
+     */
+    NeoAAArchiveItem item = header->archiveItem;
+    if (item) {
+        item->header = 0;
     }
     char *encodedData = header->encodedData;
     header->encodedData = 0;
@@ -190,6 +202,19 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 char *sizeCharPtr = currentPointer + 4;
                 uint16_t *sizeShortPtr = *(uint16_t **)&sizeCharPtr;
                 fieldKeySize = sizeShortPtr[0];
+                if (encodedSize-currentPos < fieldKeySize) {
+                    free(fieldKeys);
+                    free(fieldKeySizes);
+                    free(fieldTypes);
+                    free(headerData);
+                    for (int i = 0; i < fieldCount - 1; i++) {
+                        free(fieldKeyValues[i]);
+                    }
+                    free(fieldKeyValues);
+                    free(header);
+                    NEO_AA_LogError("string length reached past encodedData\n");
+                    return 0;
+                }
                 currentPos += 2;
                 break;
                 
@@ -260,6 +285,10 @@ uint64_t neo_aa_header_get_field_key_uint(NeoAAHeader header, int index) {
 char *neo_aa_header_get_field_key_string(NeoAAHeader header, int index) {
     size_t fieldValueSize = header->fieldKeySizes[index];
     char *newString = malloc(fieldValueSize + 1);
+    if (!newString) {
+        NEO_AA_ErrorHeapAlloc();
+        return 0;
+    }
     char *fieldValuePtr = header->fieldValues[index];
     strncpy(newString, fieldValuePtr, fieldValueSize);
     newString[fieldValueSize] = '\0';
@@ -326,6 +355,7 @@ void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
 }
 
 void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
+    /* TODO: Add support for fixing encodedData with keys that become larger */
     NEO_AA_NullParamAssert(header);
     internal_do_not_call_is_field_key_available(key);
     NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize));
@@ -334,8 +364,9 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
         neo_aa_header_add_field_uint_or_blob(header, key, fieldSize, value, fieldType);
         return;
     }
-    size_t valueSize = neo_aa_header_get_field_size(header, key);
+    size_t valueSize = neo_aa_header_get_field_size(header, keyIndex);
     if (valueSize != fieldSize) {
+        /* TODO: This will probably be supported later but we need to reform the encodedData for this which is annoying */
         NEO_AA_LogError("setting field key with different size\n");
         return;
     }
@@ -343,28 +374,40 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
         NEO_AA_LogError("setting field key with different type\n");
         return;
     }
+    void *encodedData = header->encodedData;
+    if (!encodedData) {
+        NEO_AA_LogError("header missing encoded data\n");
+        return;
+    }
+    uint64_t encodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
+    if (!encodedDataPos) {
+        NEO_AA_LogError("failed to find position of key in encoded data\n");
+        return;
+    }
     void *valuePtr = header->fieldValues[keyIndex];
     switch (fieldSize) {
         case 1:
             *(uint8_t *)valuePtr = (uint8_t)value;
-            return;
+            break;
             
         case 2:
             *(uint16_t *)valuePtr = (uint16_t)value;
-            return;
+            break;
             
         case 4:
             *(uint32_t *)valuePtr = (uint32_t)value;
-            return;
+            break;
             
         case 8:
             *(uint64_t *)valuePtr = value;
-            return;
+            break;
             
         default:
             NEO_AA_LogError("bad fieldSize\n");
             return;
     }
+    void *encodedValuePtr = encodedData + encodedDataPos + 4;
+    memcpy(encodedValuePtr, &value, fieldSize);
 }
 
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value) {
@@ -380,14 +423,14 @@ void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t str
     NEO_AA_NullParamAssert(header);
     if (stringSize > USHRT_MAX) {
         NEO_AA_LogErrorF("libNeoAppleArchive: stringSize %zu larger than USHRT_MAX\n",stringSize);
-        exit(1);
+        return;
     }
     internal_do_not_call_is_field_key_available(key);
     size_t oldSize = header->headerSize;
     size_t newSize = oldSize + 6 + stringSize;
     if (newSize > USHRT_MAX) {
         NEO_AA_LogErrorF("libNeoAppleArchive: headerSize grew past USHRT_MAX with newSize %zu\n",newSize);
-        exit(1);
+        return;
     }
     char *encodedData = header->encodedData;
     uint32_t fieldCount = header->fieldCount;
@@ -438,6 +481,42 @@ void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t str
     header->fieldTypes = newFieldTypes;
     header->fieldKeySizes = fieldKeySizes;
 }
+
+void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
+    /* TODO: This is gonna be hell with fixing encodedData... */
+    fprintf(stderr,"THIS FUNCTION IS NOT DONE YET!!! DO NOT USE IT!!!\n");
+    NEO_AA_NullParamAssert(header);
+    internal_do_not_call_is_field_key_available(key);
+    int keyIndex = neo_aa_header_get_field_key_index(header, key);
+    if (keyIndex == -1) {
+        neo_aa_header_add_field_string(header, key, stringSize, s);
+        return;
+    }
+    /* malloc new string and copy it */
+    char *stringField = malloc(stringSize);
+    NEO_AA_AssertHeapAlloc(stringField);
+    uint64_t fieldKeyEncodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
+    char *encodedData = header->encodedData;
+    NeoAAFieldType fieldType = neo_aa_header_get_field_type(header, keyIndex);
+    size_t allocationSizeForEncodedData = neo_aa_header_get_field_size(header, keyIndex);
+    if (fieldType == NEO_AA_FIELD_TYPE_STRING) {
+        /* add 2 for the string size in the encodedData */
+        allocationSizeForEncodedData += 2;
+    } else {
+        /* Subtype in encodedData is NOT for NEO_AA_FIELD_TYPE_STRING!!! Correct it... */
+        encodedData[fieldKeyEncodedDataPos + 3] = 'P';
+    }
+    if ((stringSize + 2) <= allocationSizeForEncodedData) {
+        /* encodedData alloc should fit already, do not realloc() */
+        
+    }
+    void *fieldValue = header->fieldValues[keyIndex];
+    header->fieldValues[keyIndex] = 0;
+    /* free old allocated value for field */
+    free(fieldValue);
+    
+}
+    
 
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
     NEO_AA_NullParamAssert(header);
@@ -517,4 +596,8 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
     clonedHeader->fieldValues = copiedFieldValues;
     clonedHeader->headerSize = encodedDataSize;
     return clonedHeader;
+}
+
+NeoAAFieldType neo_aa_header_get_field_type(NeoAAHeader header, int index) {
+    return header->fieldTypes[index];
 }

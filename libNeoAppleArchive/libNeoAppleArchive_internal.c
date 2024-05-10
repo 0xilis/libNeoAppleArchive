@@ -7,6 +7,10 @@
 
 #include "libNeoAppleArchive.h"
 
+uint16_t internal_do_not_call_flip_edian_16(uint16_t num) {
+    return ((num << 8)&0xff) | ((num >> 8) & 0xff);
+}
+
 uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
     return ((num>>24)&0xff) | ((num<<8)&0xff0000) | ((num>>8)&0xff00) | ((num<<24)&0xff000000);
 }
@@ -25,43 +29,14 @@ char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
     fseek(fp, 0, SEEK_SET);
     lastLoadedBinarySize_internal_do_not_use = binary_size;
     char *aeaShortcutArchive = malloc(binary_size * sizeof(char));
-    /*
-     * Explained better in comment below, but
-     * a process may write to a file while
-     * this is going on so binary_size would be
-     * bigger than the bytes we copy,
-     * making it hit EOF before binary_size
-     * is hit. This means that potentially
-     * other memory from the process may
-     * be kept here. To prevent this,
-     * we 0 out our buffer to make sure
-     * it doesn't contain any leftover memory
-     * left.
-     */
     memset(aeaShortcutArchive, 0, binary_size * sizeof(char));
-    /* copy bytes to binary, byte by byte... */
-    int c;
-    size_t n = 0;
-    while ((c = fgetc(fp)) != EOF) {
-        if (n > binary_size) {
-            /*
-             * If, at any point, a file is modified during / before copy,
-             * ex it has a really small size, but another process
-             * quickly modifies it after binary_size is saved but
-             * before / during the bytes are copied to the buffer,
-             * then it would go past the buffer, resulting
-             * in a heap overflow from our race. Fixing this
-             * problem by checking if n ever reaches past
-             * the initial binary_size...
-             */
-            free(aeaShortcutArchive);
-            fclose(fp);
-            NEO_AA_LogError("reached past binarySize\n");
-            return 0;
-        }
-        aeaShortcutArchive[n++] = (char) c;
-    }
+    size_t bytesRead = fread(aeaShortcutArchive, binary_size, 1, fp);
     fclose(fp);
+    if (bytesRead < binary_size) {
+        free(aeaShortcutArchive);
+        NEO_AA_LogError("failed to read the entire file.\n");
+        return 0;
+    }
     return aeaShortcutArchive;
 }
 
@@ -186,4 +161,68 @@ char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t
     /* Assume fieldType is NEO_AA_FIELD_TYPE_HASH */
     /* Evil hack */
     return 'F'+(fieldSize>>4);
+}
+
+uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index) {
+    NEO_AA_NullParamAssert(header);
+    NEO_AA_NullParamAssert((index >= 0));
+    size_t headerSize = header->headerSize;
+    uint32_t fieldCount = header->fieldCount;
+    NEO_AA_NullParamAssert(fieldCount);
+    if (!index) {
+        /* Index is 0; this is the first field key */
+        return 6;
+    }
+    NEO_AA_NullParamAssert((index < fieldCount));
+    int currentPos = 6;
+    for (int i = 0; i < index; i++) {
+        if (currentPos >= headerSize) {
+            NEO_AA_LogError("reached past encodedData\n");
+            return 0;
+        }
+        size_t fieldSize = neo_aa_header_get_field_size(header, i);
+        NeoAAFieldType fieldType = neo_aa_header_get_field_type(header, i);
+        /* Go past the fieldKey and subtype in encoded data */
+        currentPos += 4;
+        if (fieldType == NEO_AA_FIELD_TYPE_STRING) {
+            /* NEO_AA_FIELD_TYPE_STRING */
+            /* Go past string size, which is stored in 2 bytes, to the string itself */
+            currentPos += 2;
+        }
+        /* Go past field value */
+        currentPos += fieldSize;
+        if (currentPos > headerSize) {
+            NEO_AA_LogError("reached past encodedData\n");
+            return 0;
+        }
+    }
+    return currentPos;
+}
+
+size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
+    uint32_t *dumbHack = *(uint32_t **)&data;
+    if (dumbHack[0] != 0x31304141) { /* AA01 */
+        NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
+        return 0;
+    }
+    size_t encodedHeaderSize = (dumbHack[1] & 0xffff);
+    size_t archiveItemSize = encodedHeaderSize;
+    if (maxSize < encodedHeaderSize) {
+        NEO_AA_LogError("header size is larger than maxSize\n");
+        return 0;
+    }
+    NeoAAHeader header = neo_aa_header_create_with_encoded_data(encodedHeaderSize, data);
+    if (!header) {
+        NEO_AA_LogError("failed to create NeoAAHeader\n");
+        return 0;
+    }
+    /* cycle all fields, add blobSize to item size */
+    int fieldCount = header->fieldCount;
+    for (int i = 0; i < fieldCount; i++) {
+        if (neo_aa_header_get_field_type(header, i) == NEO_AA_FIELD_TYPE_BLOB) {
+            archiveItemSize += neo_aa_header_get_field_key_uint(header, i);
+        }
+    }
+    neo_aa_header_destroy(header);
+    return archiveItemSize;
 }

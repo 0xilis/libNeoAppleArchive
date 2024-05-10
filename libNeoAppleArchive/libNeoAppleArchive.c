@@ -9,6 +9,7 @@
 #include "libNeoAppleArchive_internal.h"
 
 void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiveSize, const char *outputPath) {
+    /* TODO: Redo this entire function. This and the one above it are by far the worst coded functions in this whole library. */
     char *oldWorkingDir = getcwd(NULL, 0);
     uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
     if (dirtyUglyHack[0] != 0x31304141) {
@@ -183,6 +184,7 @@ void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiv
 }
 
 void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath) {
+    /* TODO: Redo this entire function. This and the one above it are by far the worst coded functions in this whole library. */
     char *oldWorkingDir = getcwd(NULL, 0);
     uint8_t *appleArchive = (uint8_t *)internal_do_not_call_load_binary(archivePath);
     /* dirty ugly hack */
@@ -373,7 +375,6 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
     chdir(oldWorkingDir);
 }
 
-/* Unfinished. */
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     NEO_AA_NullParamAssert(header);
     NeoAAArchiveItem archiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
@@ -382,6 +383,12 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
         return 0;
     }
     memset(archiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
+    if (header->archiveItem) {
+        free(archiveItem);
+        NEO_AA_LogError("header already has an archiveItem holding it\n");
+        return 0;
+    }
+    header->archiveItem = archiveItem;
     archiveItem->header = header;
     return archiveItem;
 }
@@ -433,6 +440,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
             NEO_AA_LogError("cloning header in list failed\n");
             return 0;
         }
+        copiedHeader->archiveItem = copiedArchiveItem;
         copiedArchiveItem->header = copiedHeader;
         if (encodedBlobDataSize) {
             char *copiedEncodedBlobData = malloc(encodedBlobDataSize);
@@ -489,6 +497,10 @@ size_t neo_aa_archive_plain_outfile_size(NeoAAArchivePlain plainArchive) {
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem item = items[i];
         NeoAAHeader header = item->header;
+        if (!header) {
+            NEO_AA_LogError("item does not have header\n");
+            return 0;
+        }
         outfileSize += (header->headerSize + item->encodedBlobDataSize);
     }
     return outfileSize;
@@ -496,6 +508,10 @@ size_t neo_aa_archive_plain_outfile_size(NeoAAArchivePlain plainArchive) {
 
 void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer) {
     NeoAAHeader header = item->header;
+    if (!header) {
+        NEO_AA_LogError("item does not hold a header\n");
+        return;
+    }
     char *encodedHeaderData = header->encodedData;
     size_t encodedHeaderSize = header->headerSize;
     for (size_t i = 0; i < encodedHeaderSize; i++) {
@@ -514,6 +530,10 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
     NEO_AA_NullParamAssert(plainArchive);
     /* Ugly slow */
     size_t archiveSize = neo_aa_archive_plain_outfile_size(plainArchive);
+    if (!archiveSize) {
+        NEO_AA_LogError("failed to get outfile size\n");
+        return;
+    }
     /* Now we know what the archive size will be, create it. */
     char *buffer = malloc(archiveSize); /* buffer to write to fd */
     size_t offset = 0;
@@ -522,6 +542,10 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem item = items[i];
         NeoAAHeader header = item->header;
+        if (!header) {
+            NEO_AA_LogError("item does not hold a header\n");
+            return;
+        }
         neo_aa_archive_item_write_to_buffer(item, buffer + offset);
         offset += (header->headerSize + item->encodedBlobDataSize);
     }
@@ -553,4 +577,67 @@ void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
     }
     memset(item, 0, sizeof(struct neo_aa_archive_item_impl));
     free(item);
+}
+
+NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
+    /* Get the header size */
+    uint32_t *dumbHack = *(uint32_t **)&data;
+    if (dumbHack[0] != 0x31304141) { /* AA01 */
+        NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
+        return 0;
+    }
+    size_t encodedHeaderSize = (dumbHack[1] & 0xffff);
+    if (encodedSize < encodedHeaderSize) {
+        NEO_AA_LogError("header size is larger than encoded item size\n");
+        return 0;
+    }
+    NeoAAHeader header = neo_aa_header_create_with_encoded_data(encodedHeaderSize, data);
+    if (!header) {
+        NEO_AA_LogError("failed to create header\n");
+        return 0;
+    }
+    NeoAAArchiveItem item = neo_aa_archive_item_create_with_header(header);
+    if (!item) {
+        NEO_AA_LogError("failed to create item\n");
+        return 0;
+    }
+    if (encodedSize == encodedHeaderSize) {
+        /* The header is the entire item (no blob data) */
+        return item;
+    }
+    /* archive item contains some blob data, add it */
+    uint8_t *blobData = data + encodedHeaderSize;
+    size_t blobDataSize = encodedSize - encodedHeaderSize;
+    neo_aa_archive_item_add_blob_data(item, (char *)blobData, blobDataSize);
+    return item;
+}
+
+NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
+    NeoAAArchiveItem *itemList = 0;
+    int itemCount = 0;
+    size_t maxSize = encodedSize;
+    uint64_t position = 0;
+    while (position < encodedSize) {
+        itemCount++;
+        NeoAAArchiveItem *itemListNewPtr = realloc(itemList, sizeof(NeoAAArchiveItem) * itemCount);
+        if (!itemListNewPtr) {
+            free(itemList);
+            NEO_AA_ErrorHeapAlloc();
+            return 0;
+        }
+        itemList = itemListNewPtr;
+        size_t currentHeaderSize = internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(maxSize, data + position);
+        if (!currentHeaderSize) {
+            free(itemList);
+            NEO_AA_LogError("failed to get header size\n");
+            return 0;
+        }
+        NeoAAArchiveItem item = neo_aa_archive_item_create_with_encoded_data(currentHeaderSize, data + position);
+        itemList[itemCount - 1] = item;
+        position += currentHeaderSize;
+        maxSize = encodedSize - position;
+    }
+    NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_items(itemList, itemCount);
+    free(itemList);
+    return plainArchive;
 }

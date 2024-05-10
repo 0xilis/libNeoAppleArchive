@@ -23,6 +23,8 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value);
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize);
 void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
+void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header);
+NeoAAFieldType neo_aa_header_get_field_type(NeoAAHeader header, int index);
 
 #endif /* neo_aa_header_h */
