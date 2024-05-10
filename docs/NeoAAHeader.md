@@ -16,3 +16,4 @@ NeoAAHeader is a type that is for representing the header of the Apple Archive. 
 | neo_aa_header_set_field_blob() | Sets the size of the blob in the header, or adds it if it is not present. |
 | neo_aa_header_add_field_string() | Adds a string field key in the header. Will soon be deprecated for normal use by neo_aa_header_set_field_string(). |
 | neo_aa_header_clone_header() | malloc()'s a new clone of the header, as well as all field keys and their values. |
+| neo_aa_header_get_field_type() | Returns the NeoAAFieldType of the field key. |
