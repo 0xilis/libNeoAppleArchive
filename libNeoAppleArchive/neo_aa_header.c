@@ -70,7 +70,8 @@ void neo_aa_header_destroy(NeoAAHeader header) {
 
 NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
     uint32_t *dumbHack = *(uint32_t **)&data;
-    if (dumbHack[0] != 0x31304141) { /* AA01 */
+    uint32_t headerMagic = dumbHack[0];
+    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) { /* AA01/YAA1 */
         fprintf(stderr,"neo_aa_header_create_with_encoded_data: data is not raw header (compression not yet supported)\n");
         return 0;
     }

@@ -201,7 +201,8 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
 
 size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
     uint32_t *dumbHack = *(uint32_t **)&data;
-    if (dumbHack[0] != 0x31304141) { /* AA01 */
+    uint32_t headerMagic = dumbHack[0];
+    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
         return 0;
     }

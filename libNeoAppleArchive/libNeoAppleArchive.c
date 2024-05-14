@@ -12,8 +12,9 @@ void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiv
     /* TODO: Redo this entire function. This and the one above it are by far the worst coded functions in this whole library. */
     char *oldWorkingDir = getcwd(NULL, 0);
     uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
-    if (dirtyUglyHack[0] != 0x31304141) {
-        fprintf(stderr, "neo_aa_extract_aar_buffer_to_path: magic not AA01. (compressed aar not yet supported, needs to be raw)\n");
+    uint32_t headerMagic = dirtyUglyHack[0];
+    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) {
+        NEO_AA_LogError("magic not AA01/YAA1. (compressed aar not yet supported, needs to be raw)\n");
         return;
     }
     uint8_t *currentHeader = appleArchive;
@@ -34,8 +35,9 @@ void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiv
     }
     while (extracting) {
         dirtyUglyHack = *(uint32_t **)&currentHeader;
-        if (dirtyUglyHack[0] != 0x31304141) {
-            fprintf(stderr, "neo_aa_extract_aar_to_path: magic not AA01. (compressed aar not yet supported, needs to be raw)\n");
+        headerMagic = dirtyUglyHack[0];
+        if (headerMagic != 0x31304141 && headerMagic != 0x31414159) {
+            NEO_AA_LogError("neo_aa_extract_aar_to_path: magic not AA01/YAA1. (compressed aar not yet supported, needs to be raw)\n");
             return;
         }
         uint16_t headerSize = (dirtyUglyHack[1] & 0xffff);
@@ -189,8 +191,9 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
     uint8_t *appleArchive = (uint8_t *)internal_do_not_call_load_binary(archivePath);
     /* dirty ugly hack */
     uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
-    if (dirtyUglyHack[0] != 0x31304141) {
-        fprintf(stderr, "neo_aa_extract_aar_to_path: magic not AA01. (compressed aar not yet supported, needs to be raw)\n");
+    uint32_t headerMagic = dirtyUglyHack[0];
+    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) {
+        NEO_AA_LogError("magic not AA01/YAA1. (compressed aar not yet supported, needs to be raw)\n");
         return;
     }
     size_t appleArchiveSize = lastLoadedBinarySize_internal_do_not_use;
@@ -212,9 +215,10 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
     }
     while (extracting) {
         dirtyUglyHack = *(uint32_t **)&currentHeader;
-        if (dirtyUglyHack[0] != 0x31304141) {
+        headerMagic = dirtyUglyHack[0];
+        if (headerMagic != 0x31304141 && headerMagic != 0x31414159) {
             free(appleArchive);
-            fprintf(stderr, "neo_aa_extract_aar_to_path: magic not AA01. (compressed aar not yet supported, needs to be raw)\n");
+            NEO_AA_LogError("neo_aa_extract_aar_to_path: magic not AA01/YAA1. (compressed aar not yet supported, needs to be raw)\n");
             return;
         }
         uint16_t headerSize = (dirtyUglyHack[1] & 0xffff);
@@ -582,7 +586,8 @@ void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
 NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
     /* Get the header size */
     uint32_t *dumbHack = *(uint32_t **)&data;
-    if (dumbHack[0] != 0x31304141) { /* AA01 */
+    uint32_t headerMagic = dumbHack[0];
+    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
         return 0;
     }

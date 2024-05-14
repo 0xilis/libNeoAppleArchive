@@ -88,6 +88,5 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 
 #include "libNeoAppleArchive_internal.h"
 #include "neo_aa_header.h"
-/* #include "neo_aea_archive.h" */
 
 #endif
