@@ -10,3 +10,5 @@ Examples of contributions may include:
 - Support for extra AAR/YAA features.
 - Additional, improved documentation.
 - Additional tests and examples of usage.
+
+Please attempt to explain how your PR improves these, or a separate item not listed. Please also make sure your PR, if it adds new code, to be readable and well commented.
