@@ -16,7 +16,6 @@ Limited functions for messing around with headers and extracting apple archives.
 
 - Support all compression types for Apple Archive
 - Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` profile.
-- Bundle in my own libERFS (ramdisk / emulated file system) and support it inside of libNeoAppleArchive
 - Convienience functions for archiving / extracting files and directories.
 - Making code more readable
   
