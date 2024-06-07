@@ -12,6 +12,14 @@ Unfinished cross-compat library for parsing Apple Archive (and, by extension, YA
 
 Limited functions for messing around with headers and extracting apple archives. There are functions for manually creating apple archives (or modifying existing ones), however there currently is no functions for easy archiving of a directory from a file path. Do be aware that it should be possible to do this though with the provided functions in the library. YAA is also supported, as it is just legacy Apple Archive, and all YAA files are just Apple Archives with a different header essentially.
 
+### Roadmap:
+
+- Support all compression types for Apple Archive
+- Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` profile.
+- Bundle in my own libERFS (ramdisk / emulated file system) and support it inside of libNeoAppleArchive
+- Convienience functions for archiving / extracting files and directories.
+- Making code more readable
+  
 ### Compatibility:
 
 - macOS
