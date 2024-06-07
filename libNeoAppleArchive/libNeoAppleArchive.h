@@ -57,6 +57,15 @@ struct neo_aa_archive_plain_impl {
 
 typedef struct neo_aa_archive_plain_impl *NeoAAArchivePlain;
 
+struct neo_aa_archive_generic_impl {
+    NeoAAArchivePlain raw; /* the raw NeoAAArchivePlain */
+    int compression; /* int representing algo, LZFSE/LZ4/etc */
+    size_t uncompressedSize; /* size of RAW data */
+    size_t compressedSize; /* size of compressed data */
+};
+
+typedef struct neo_aa_archive_generic_impl *NeoAAArchiveGeneric;
+
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value);
 void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize);

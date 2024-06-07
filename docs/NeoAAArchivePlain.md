@@ -12,3 +12,4 @@ This type is incomplete and has a very high chance of being changed in the futur
 | neo_aa_archive_plain_writefd() | Writes the Apple Archive for the NeoAAArchivePlain to an open file descriptor. |
 | neo_aa_archive_plain_write_path() | Opens the filepath and calls neo_aa_archive_plain_writefd() with the NeoAAArchivePlain. |
 | neo_aa_archive_plain_create_with_encoded_data() | Creates a NeoAAArchivePlain from encoded data (the binary data of an `.aar` file) |
+| neo_aa_archive_plain_create_with_aar_path() | Creates a NeoAAArchivePlain from a path to a raw, uncompressed `.aar` file. |

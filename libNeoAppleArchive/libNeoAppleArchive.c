@@ -7,6 +7,7 @@
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
+#include "compression/lzfse/lzfse.h"
 
 void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiveSize, const char *outputPath) {
     /* TODO: Redo this entire function. This and the one above it are by far the worst coded functions in this whole library. */
@@ -645,4 +646,180 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
     NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_items(itemList, itemCount);
     free(itemList);
     return plainArchive;
+}
+
+NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
+    NEO_AA_NullParamAssert(path);
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        NEO_AA_LogError("failed to open filepath\n");
+        return 0;
+    }
+    fseek(fp, 0, SEEK_END);
+    size_t binary_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    int fd = fp->_file;
+    if (binary_size > (UINT32_MAX-6) || binary_size < 12) {
+        fclose(fp);
+        NEO_AA_LogError("AEA over 4GB or under 12 bytes\n");
+        return 0;
+    }
+    uint8_t *data = malloc(binary_size);
+    if (!data) {
+        fclose(fp);
+        NEO_AA_ErrorHeapAlloc();
+        return 0;
+    }
+    memset(data, 0, binary_size);
+    ssize_t bytesRead = read(fd, data, binary_size);
+    if (bytesRead < binary_size) {
+        fclose(fp);
+        free(data);
+        NEO_AA_LogError("failed to read entire file\n");
+        return 0;
+    }
+    fclose(fp);
+    NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(binary_size, data);
+    free(data);
+    return plainArchive;
+}
+
+/*
+ * neo_aa_archive_generic_from_encoded_data
+ *
+ * Feed this encoded data.
+ * This converts it to NeoAAArchiveGeneric,
+ * which handles all compression types of
+ * .aar, including uncompressed.
+ * Well, it *will*... currently it only
+ * supports LZFSE and RAW at the moment.
+ *
+ * On succession, returns a NeoAAArchiveGeneric.
+ * On fail, returns 0.
+ */
+#define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
+#define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */
+#define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
+
+NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize, uint8_t *data) {
+    /* get the first 4 bytes from data, to use as magic. */
+    uint32_t magic = ((uint32_t *)data)[0];
+    if (magic == AAR_MAGIC || magic == YAA_MAGIC) {
+        /* If magic is AA01 or YAA1, then this is a RAW archive. */
+        /* Create the plain archive. */
+        NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(encodedSize, data);
+        if (!plainArchive) {
+            /* Failed to create plain archive, return 0. */
+            return 0;
+        }
+        NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
+        if (!genericArchive) {
+            /* Not enough space to create the generic archive. */
+            neo_aa_archive_plain_destroy(plainArchive);
+            NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
+            return 0;
+        }
+        /* 0-fill struct */
+        memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
+        genericArchive->raw = plainArchive;
+        genericArchive->compression = NEO_AA_COMPRESSION_NONE;
+        genericArchive->compressedSize = encodedSize;
+        genericArchive->uncompressedSize = encodedSize;
+        return genericArchive;
+    }
+    if ((magic & 0x00FFFFFF) == PBZ__MAGIC) {
+        /* pbz* type, so must be compressed archive */
+        char compressionType = magic >> 24;
+        if (compressionType == 'e') {
+            /* type is LZFSE */
+            /* compressed size of aar is stored at 0x18 in binary */
+            size_t compressedSize = FLIP_32(*((uint32_t *)(data + 0x18)));
+            /* uncompressed size of aar is stored at 0x10 in binary */
+            size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
+            uint8_t *encodedRAWData = malloc(uncompressedSize);
+            memset(encodedRAWData, 0, uncompressedSize);
+            size_t decompressedBytes = lzfse_decode_buffer(encodedRAWData, uncompressedSize, data + 0x1C, compressedSize, 0);
+            if (decompressedBytes != uncompressedSize) {
+                free(encodedRAWData);
+                NEO_AA_LogError("failed to decompress LZFSE data\n");
+                return 0;
+            }
+            NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
+            free(encodedRAWData);
+            if (!plainArchive) {
+                /* Failed to create plain archive, return 0. */
+                return 0;
+            }
+            NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
+            if (!genericArchive) {
+                /* Not enough space to create the generic archive. */
+                neo_aa_archive_plain_destroy(plainArchive);
+                NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
+                return 0;
+            }
+            /* 0-fill struct */
+            memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
+            genericArchive->raw = plainArchive;
+            genericArchive->compression = NEO_AA_COMPRESSION_LZFSE;
+            genericArchive->compressedSize = compressedSize;
+            genericArchive->uncompressedSize = uncompressedSize;
+            return genericArchive;
+        } else {
+            /* We currently don't support non LZFSE/RAW apple archives, sorry! */
+            NEO_AA_LogError("We currently don't support non LZFSE/RAW apple archives, sorry!\n");
+            return 0;
+        }
+    }
+    NEO_AA_LogError("Data does not appear to be apple archive or compressed.\n");
+    return 0;
+}
+
+/*
+ * neo_aa_archive_generic_from_path
+ *
+ * Feed this a .aar file.
+ * This converts it to NeoAAArchiveGeneric,
+ * which handles all compression types of
+ * .aar, including uncompressed.
+ * Well, it *will*... currently it only
+ * supports LZFSE and RAW at the moment.
+ */
+NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
+    NEO_AA_NullParamAssert(path);
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        NEO_AA_LogError("failed to open filepath\n");
+        return 0;
+    }
+    fseek(fp, 0, SEEK_END);
+    size_t binary_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    int fd = fp->_file;
+    if (binary_size < 6) {
+        /* Compressed or uncompressed, a .aar *cannot* be less than 6 bytes. */
+        fclose(fp);
+        NEO_AA_LogError("AAR is less than 6 bytes \n");
+        return 0;
+    }
+    /* malloc our data */
+    uint8_t *data = malloc(binary_size);
+    if (!data) {
+        fclose(fp);
+        NEO_AA_ErrorHeapAlloc();
+        return 0;
+    }
+    /* 0-fill buffer */
+    memset(data, 0, binary_size);
+    /* copy bytes from file to buffer */
+    ssize_t bytesRead = read(fd, data, binary_size);
+    if (bytesRead < binary_size) {
+        fclose(fp);
+        free(data);
+        NEO_AA_LogError("failed to read entire file\n");
+        return 0;
+    }
+    fclose(fp);
+    NeoAAArchiveGeneric genericArchive = neo_aa_archive_generic_from_encoded_data(binary_size, data);
+    free(data);
+    return genericArchive;
 }
