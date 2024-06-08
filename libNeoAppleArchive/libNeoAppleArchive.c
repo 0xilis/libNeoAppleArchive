@@ -8,13 +8,14 @@
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
 #include "compression/lzfse/lzfse.h"
+#include <zlib.h>
 
 void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiveSize, const char *outputPath) {
     /* TODO: Redo this entire function. This and the one above it are by far the worst coded functions in this whole library. */
     char *oldWorkingDir = getcwd(NULL, 0);
     uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
     uint32_t headerMagic = dirtyUglyHack[0];
-    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) {
+    if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
         NEO_AA_LogError("magic not AA01/YAA1. (compressed aar not yet supported, needs to be raw)\n");
         return;
     }
@@ -37,7 +38,7 @@ void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiv
     while (extracting) {
         dirtyUglyHack = *(uint32_t **)&currentHeader;
         headerMagic = dirtyUglyHack[0];
-        if (headerMagic != 0x31304141 && headerMagic != 0x31414159) {
+        if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
             NEO_AA_LogError("neo_aa_extract_aar_to_path: magic not AA01/YAA1. (compressed aar not yet supported, needs to be raw)\n");
             return;
         }
@@ -389,6 +390,14 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     }
     memset(archiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
     if (header->archiveItem) {
+        /*
+         * This header was already used in an existing archive item.
+         * This means two NeoAAArchiveItems would be holding the same
+         * pointer, ruh-oh! It's easy for someone who does this to
+         * run into heap issues, hence we prevent this from happening.
+         * If you want to re-use a header for an archive item, please
+         * use neo_aa_header_clone_header to clone it.
+         */
         free(archiveItem);
         NEO_AA_LogError("header already has an archiveItem holding it\n");
         return 0;
@@ -398,7 +407,6 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     return archiveItem;
 }
 
-/* Unfinished. */
 void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t dataSize) {
     NEO_AA_NullParamAssert(item);
     NEO_AA_NullParamAssert(data);
@@ -428,6 +436,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
     memset(plainArchive, 0, sizeof(struct neo_aa_archive_plain_impl));
     NeoAAArchiveItem *copiedItems = malloc(sizeof(NeoAAArchiveItem) * itemCount);
     for (int i = 0; i < itemCount; i++) {
+        /* We copy the item list (array of NeoAAArchiveItem) here */
         NeoAAArchiveItem archiveItem = items[i];
         char *encodedBlobData = archiveItem->encodedBlobData;
         size_t encodedBlobDataSize = archiveItem->encodedBlobDataSize;
@@ -588,7 +597,7 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize
     /* Get the header size */
     uint32_t *dumbHack = *(uint32_t **)&data;
     uint32_t headerMagic = dumbHack[0];
-    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) { /* AA01/YAA1 */
+    if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
         return 0;
     }
@@ -697,10 +706,6 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
  * On succession, returns a NeoAAArchiveGeneric.
  * On fail, returns 0.
  */
-#define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
-#define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */
-#define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
-
 NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize, uint8_t *data) {
     /* get the first 4 bytes from data, to use as magic. */
     uint32_t magic = ((uint32_t *)data)[0];
@@ -710,14 +715,14 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
         NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(encodedSize, data);
         if (!plainArchive) {
             /* Failed to create plain archive, return 0. */
-            return 0;
+            return NULL;
         }
         NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
         if (!genericArchive) {
             /* Not enough space to create the generic archive. */
             neo_aa_archive_plain_destroy(plainArchive);
             NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
-            return 0;
+            return NULL;
         }
         /* 0-fill struct */
         memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
@@ -737,25 +742,29 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             /* uncompressed size of aar is stored at 0x10 in binary */
             size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
             uint8_t *encodedRAWData = malloc(uncompressedSize);
+            if (!encodedRAWData) {
+                NEO_AA_ErrorHeapAlloc();
+                return NULL;
+            }
             memset(encodedRAWData, 0, uncompressedSize);
             size_t decompressedBytes = lzfse_decode_buffer(encodedRAWData, uncompressedSize, data + 0x1C, compressedSize, 0);
             if (decompressedBytes != uncompressedSize) {
                 free(encodedRAWData);
                 NEO_AA_LogError("failed to decompress LZFSE data\n");
-                return 0;
+                return NULL;
             }
             NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
             free(encodedRAWData);
             if (!plainArchive) {
                 /* Failed to create plain archive, return 0. */
-                return 0;
+                return NULL;
             }
             NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
             if (!genericArchive) {
                 /* Not enough space to create the generic archive. */
                 neo_aa_archive_plain_destroy(plainArchive);
                 NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
-                return 0;
+                return NULL;
             }
             /* 0-fill struct */
             memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
@@ -764,14 +773,48 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             genericArchive->compressedSize = compressedSize;
             genericArchive->uncompressedSize = uncompressedSize;
             return genericArchive;
+        } else if (compressionType == 'z') {
+            /* type is ZLIB */
+            /* compressed size of aar is stored at 0x18 in binary */
+            size_t compressedSize = FLIP_32(*((uint32_t *)(data + 0x18)));
+            /* uncompressed size of aar is stored at 0x10 in binary */
+            size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
+            uint8_t *encodedRAWData = malloc(uncompressedSize);
+            if (!encodedRAWData) {
+                NEO_AA_ErrorHeapAlloc();
+                return NULL;
+            }
+            memset(encodedRAWData, 0, uncompressedSize);
+            /* check for error codes later */
+            internal_do_not_call_inflate(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
+            NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
+            free(encodedRAWData);
+            if (!plainArchive) {
+                /* Failed to create plain archive, return 0. */
+                return NULL;
+            }
+            NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
+            if (!genericArchive) {
+                /* Not enough space to create the generic archive. */
+                neo_aa_archive_plain_destroy(plainArchive);
+                NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
+                return NULL;
+            }
+            /* 0-fill struct */
+            memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
+            genericArchive->raw = plainArchive;
+            genericArchive->compression = NEO_AA_COMPRESSION_ZLIB;
+            genericArchive->compressedSize = compressedSize;
+            genericArchive->uncompressedSize = uncompressedSize;
+            return genericArchive;
         } else {
             /* We currently don't support non LZFSE/RAW apple archives, sorry! */
             NEO_AA_LogError("We currently don't support non LZFSE/RAW apple archives, sorry!\n");
-            return 0;
+            return NULL;
         }
     }
     NEO_AA_LogError("Data does not appear to be apple archive or compressed.\n");
-    return 0;
+    return NULL;
 }
 
 /*
@@ -789,7 +832,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
     FILE *fp = fopen(path, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
-        return 0;
+        return NULL;
     }
     fseek(fp, 0, SEEK_END);
     size_t binary_size = ftell(fp);
@@ -799,14 +842,14 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
         /* Compressed or uncompressed, a .aar *cannot* be less than 6 bytes. */
         fclose(fp);
         NEO_AA_LogError("AAR is less than 6 bytes \n");
-        return 0;
+        return NULL;
     }
     /* malloc our data */
     uint8_t *data = malloc(binary_size);
     if (!data) {
         fclose(fp);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     /* 0-fill buffer */
     memset(data, 0, binary_size);
@@ -816,7 +859,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
         fclose(fp);
         free(data);
         NEO_AA_LogError("failed to read entire file\n");
-        return 0;
+        return NULL;
     }
     fclose(fp);
     NeoAAArchiveGeneric genericArchive = neo_aa_archive_generic_from_encoded_data(binary_size, data);

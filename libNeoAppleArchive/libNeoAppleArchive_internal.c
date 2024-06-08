@@ -6,6 +6,7 @@
 //
 
 #include "libNeoAppleArchive.h"
+#include <zlib.h>
 
 uint16_t internal_do_not_call_flip_edian_16(uint16_t num) {
     return ((num << 8)&0xff) | ((num >> 8) & 0xff);
@@ -202,7 +203,7 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
 size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
     uint32_t *dumbHack = *(uint32_t **)&data;
     uint32_t headerMagic = dumbHack[0];
-    if (headerMagic != 0x31304141 && headerMagic != 0x31414159) { /* AA01/YAA1 */
+    if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
         return 0;
     }
@@ -226,4 +227,52 @@ size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_da
     }
     neo_aa_header_destroy(header);
     return archiveItemSize;
+}
+
+/*
+ * internal_do_not_call_inflate
+ *
+ * Function used for zlib decompression from buffers.
+ * src: the source buffer containing the compressed (gzip or zlib) data
+ * srcLen: the length of the source buffer
+ * dst: the destination buffer, into which the output will be written
+ * dstLen: the length of the destination buffer
+ *
+ * Return values:
+ * Z_BUF_ERROR: if dstLen is not large enough to fit the inflated data
+ * Z_MEM_ERROR: if there's insufficient memory to perform the decompression
+ * Z_DATA_ERROR: if the input data was corrupt
+ */
+int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dstLen) {
+    z_stream strm  = {0};
+    strm.total_in  = strm.avail_in  = srcLen;
+    strm.total_out = strm.avail_out = dstLen;
+    strm.next_in   = (Bytef *) src;
+    strm.next_out  = (Bytef *) dst;
+
+    strm.zalloc = Z_NULL;
+    strm.zfree  = Z_NULL;
+    strm.opaque = Z_NULL;
+
+    int err = -1;
+    int ret = -1;
+
+    err = inflateInit2(&strm, (15 + 32)); //15 window bits, and the +32 tells zlib to to detect if using gzip or zlib
+    if (err == Z_OK) {
+        err = inflate(&strm, Z_FINISH);
+        if (err == Z_STREAM_END) {
+            ret = (int)strm.total_out;
+        }
+        else {
+             inflateEnd(&strm);
+             return err;
+        }
+    }
+    else {
+        inflateEnd(&strm);
+        return err;
+    }
+
+    inflateEnd(&strm);
+    return ret;
 }

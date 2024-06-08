@@ -39,5 +39,10 @@ int internal_do_not_call_is_field_type_supported_size(NeoAAFieldType fieldType, 
 char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t fieldType, size_t fieldSize);
 uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index);
 size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data);
+int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dstLen);
+
+#define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
+#define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */
+#define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
 
 #endif /* neo_aa_header_h */

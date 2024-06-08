@@ -95,6 +95,13 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 #define USHRT_MAX 65535
 #endif
 
+/* Compliant with the one defined in libAppleArchive, which is compliant with libcompression */
+#ifndef NEO_AA_COMPRESSION_LZFSE
+#define NEO_AA_COMPRESSION_LZFSE 0x801
+#define NEO_AA_COMPRESSION_NONE 0
+#define NEO_AA_COMPRESSION_ZLIB 0x505
+#endif
+
 #include "libNeoAppleArchive_internal.h"
 #include "neo_aa_header.h"
 
