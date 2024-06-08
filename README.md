@@ -18,11 +18,13 @@ Limited functions for messing around with headers and extracting apple archives.
 - Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` profile.
 - Convienience functions for archiving / extracting files and directories.
 - Making code more readable
-- Native Windows support (While planned, do be aware this is at the bottom of the list of the roadmap)
+- CLI for macOS/Linux (Will be on a seperate repo)
+- GUI for Windows/macOS/Linux (If this happens, this won't be for a while, just an fyi)
+- Native Windows support (While planned, do be aware this is at the bottom of the list of the roadmap).
   
 ### Compatibility:
 
-- macOS
+- Most Darwin Operating Systems (macOS, iOS, watchOS, visionOS etc.) 
 - Linux
 
 # NOTE
