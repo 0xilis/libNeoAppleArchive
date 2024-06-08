@@ -5,7 +5,7 @@ Unfinished cross-compat library for parsing Apple Archive (and, by extension, YA
 
 - Any archive with a type other than directory, regular file or symlink. Be aware this is rare however.
 - Readable code, the current version is stable but could be easier to read.
-- LZMA, LZ4, ZLIB compressed `.aar`s; only `RAW` and `LZFSE` are currently supported.
+- LZMA and LZ4 compressed `.aar`s; only `RAW`, `LZFSE`, and `ZLIB` are currently supported.
 - Multi-Threadded support.
 
 ### What is:
