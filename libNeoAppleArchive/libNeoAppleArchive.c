@@ -701,7 +701,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
  * which handles all compression types of
  * .aar, including uncompressed.
  * Well, it *will*... currently it only
- * supports LZFSE and RAW at the moment.
+ * supports ZLIB/LZFSE/RAW at the moment.
  *
  * On succession, returns a NeoAAArchiveGeneric.
  * On fail, returns 0.
@@ -808,8 +808,8 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             genericArchive->uncompressedSize = uncompressedSize;
             return genericArchive;
         } else {
-            /* We currently don't support non LZFSE/RAW apple archives, sorry! */
-            NEO_AA_LogError("We currently don't support non LZFSE/RAW apple archives, sorry!\n");
+            /* We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry! */
+            NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry!\n");
             return NULL;
         }
     }
@@ -825,7 +825,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
  * which handles all compression types of
  * .aar, including uncompressed.
  * Well, it *will*... currently it only
- * supports LZFSE and RAW at the moment.
+ * supports ZLIB/LZFSE/RAW at the moment.
  */
 NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
     NEO_AA_NullParamAssert(path);
