@@ -386,7 +386,7 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     NeoAAArchiveItem archiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
     if (!archiveItem) {
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     memset(archiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
     if (header->archiveItem) {
@@ -400,7 +400,7 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
          */
         free(archiveItem);
         NEO_AA_LogError("header already has an archiveItem holding it\n");
-        return 0;
+        return NULL;
     }
     header->archiveItem = archiveItem;
     archiveItem->header = header;
@@ -431,7 +431,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
     NeoAAArchivePlain plainArchive = malloc(sizeof(struct neo_aa_archive_plain_impl));
     if (!plainArchive) {
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     memset(plainArchive, 0, sizeof(struct neo_aa_archive_plain_impl));
     NeoAAArchiveItem *copiedItems = malloc(sizeof(NeoAAArchiveItem) * itemCount);
@@ -444,7 +444,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         if (!copiedArchiveItem) {
             free(plainArchive);
             NEO_AA_ErrorHeapAlloc();
-            return 0;
+            return NULL;
         }
         memset(copiedArchiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
         NeoAAHeader copiedHeader = neo_aa_header_clone_header(archiveItem->header);
@@ -452,7 +452,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
             free(copiedArchiveItem);
             free(plainArchive);
             NEO_AA_LogError("cloning header in list failed\n");
-            return 0;
+            return NULL;
         }
         copiedHeader->archiveItem = copiedArchiveItem;
         copiedArchiveItem->header = copiedHeader;
@@ -462,7 +462,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
                 free(copiedArchiveItem);
                 free(plainArchive);
                 NEO_AA_ErrorHeapAlloc();
-                return 0;
+                return NULL;
             }
             for (size_t j = 0; j < encodedBlobDataSize; j++) {
                 copiedEncodedBlobData[j] = encodedBlobData[j];
@@ -599,22 +599,22 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize
     uint32_t headerMagic = dumbHack[0];
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
-        return 0;
+        return NULL;
     }
     size_t encodedHeaderSize = (dumbHack[1] & 0xffff);
     if (encodedSize < encodedHeaderSize) {
         NEO_AA_LogError("header size is larger than encoded item size\n");
-        return 0;
+        return NULL;
     }
     NeoAAHeader header = neo_aa_header_create_with_encoded_data(encodedHeaderSize, data);
     if (!header) {
         NEO_AA_LogError("failed to create header\n");
-        return 0;
+        return NULL;
     }
     NeoAAArchiveItem item = neo_aa_archive_item_create_with_header(header);
     if (!item) {
         NEO_AA_LogError("failed to create item\n");
-        return 0;
+        return NULL;
     }
     if (encodedSize == encodedHeaderSize) {
         /* The header is the entire item (no blob data) */
@@ -638,14 +638,14 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
         if (!itemListNewPtr) {
             free(itemList);
             NEO_AA_ErrorHeapAlloc();
-            return 0;
+            return NULL;
         }
         itemList = itemListNewPtr;
         size_t currentHeaderSize = internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(maxSize, data + position);
         if (!currentHeaderSize) {
             free(itemList);
             NEO_AA_LogError("failed to get header size\n");
-            return 0;
+            return NULL;
         }
         NeoAAArchiveItem item = neo_aa_archive_item_create_with_encoded_data(currentHeaderSize, data + position);
         itemList[itemCount - 1] = item;
@@ -662,7 +662,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
     FILE *fp = fopen(path, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
-        return 0;
+        return NULL;
     }
     fseek(fp, 0, SEEK_END);
     size_t binary_size = ftell(fp);
@@ -671,13 +671,13 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
     if (binary_size > (UINT32_MAX-6) || binary_size < 12) {
         fclose(fp);
         NEO_AA_LogError("AEA over 4GB or under 12 bytes\n");
-        return 0;
+        return NULL;
     }
     uint8_t *data = malloc(binary_size);
     if (!data) {
         fclose(fp);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     memset(data, 0, binary_size);
     ssize_t bytesRead = read(fd, data, binary_size);
@@ -685,7 +685,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
         fclose(fp);
         free(data);
         NEO_AA_LogError("failed to read entire file\n");
-        return 0;
+        return NULL;
     }
     fclose(fp);
     NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(binary_size, data);
@@ -714,7 +714,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
         /* Create the plain archive. */
         NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(encodedSize, data);
         if (!plainArchive) {
-            /* Failed to create plain archive, return 0. */
+            /* Failed to create plain archive, return NULL. */
             return NULL;
         }
         NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
@@ -756,7 +756,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
             free(encodedRAWData);
             if (!plainArchive) {
-                /* Failed to create plain archive, return 0. */
+                /* Failed to create plain archive, return NULL. */
                 return NULL;
             }
             NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
@@ -790,7 +790,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
             free(encodedRAWData);
             if (!plainArchive) {
-                /* Failed to create plain archive, return 0. */
+                /* Failed to create plain archive, return NULL. */
                 return NULL;
             }
             NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));

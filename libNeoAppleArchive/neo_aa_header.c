@@ -12,7 +12,7 @@ NeoAAHeader neo_aa_header_create(void) {
     NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
     if (!header) {
         fprintf(stderr,"neo_aa_header_create: malloc\n");
-        return 0;
+        return NULL;
     }
     memset(header, 0, sizeof(struct neo_aa_header_impl));
     size_t default_header_size = 6;
@@ -73,20 +73,20 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
     uint32_t headerMagic = dumbHack[0];
     if (headerMagic != 0x31304141 && headerMagic != 0x31414159) { /* AA01/YAA1 */
         fprintf(stderr,"neo_aa_header_create_with_encoded_data: data is not raw header (compression not yet supported)\n");
-        return 0;
+        return NULL;
     }
     if ((dumbHack[1] & 0xffff) != encodedSize) {
         fprintf(stderr,"neo_aa_header_create_with_encoded_data: encodedSize mismatch\n");
-        return 0;
+        return NULL;
     }
     if (encodedSize < 6) {
         fprintf(stderr,"neo_aa_header_create_with_encoded_data: encodedSize too small\n");
-        return 0;
+        return NULL;
     }
     NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
     if (!header) {
         fprintf(stderr,"neo_aa_header_create_with_encoded_data: malloc\n");
-        return 0;
+        return NULL;
     }
     memset(header, 0, sizeof(struct neo_aa_header_impl));
     char *headerData = malloc(encodedSize);
@@ -214,7 +214,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                     free(fieldKeyValues);
                     free(header);
                     NEO_AA_LogError("string length reached past encodedData\n");
-                    return 0;
+                    return NULL;
                 }
                 currentPos += 2;
                 break;
@@ -230,7 +230,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 free(fieldKeyValues);
                 free(header);
                 fprintf(stderr, "neo_aa_header_create_with_encoded_data: invalid field subtype (%x)\n",fieldKeyPlusSubtype);
-                return 0;
+                return NULL;
         }
         
         fieldKeys[fieldCount - 1] = fieldKey;
@@ -288,7 +288,7 @@ char *neo_aa_header_get_field_key_string(NeoAAHeader header, int index) {
     char *newString = malloc(fieldValueSize + 1);
     if (!newString) {
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     char *fieldValuePtr = header->fieldValues[index];
     strncpy(newString, fieldValuePtr, fieldValueSize);
@@ -531,21 +531,21 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
     NeoAAHeader clonedHeader = malloc(sizeof(struct neo_aa_header_impl));
     if (!clonedHeader) {
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     memset(clonedHeader, 0, sizeof(struct neo_aa_header_impl));
     size_t *copiedFieldKeySizes = malloc(fieldCount * sizeof(size_t));
     if (!copiedFieldKeySizes) {
         free(clonedHeader);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     char *copiedEncodedData = malloc(encodedDataSize);
     if (!copiedEncodedData) {
         free(copiedFieldKeySizes);
         free(clonedHeader);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     uint32_t *copiedFieldKeys = malloc(fieldCount * sizeof(uint32_t));
     if (!copiedFieldKeys) {
@@ -553,7 +553,7 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         free(copiedFieldKeySizes);
         free(clonedHeader);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     char *copiedFieldTypes = malloc(fieldCount);
     if (!copiedFieldTypes) {
@@ -562,7 +562,7 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         free(copiedFieldKeySizes);
         free(clonedHeader);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     void **copiedFieldValues = malloc(fieldCount * sizeof(void*));
     if (!copiedFieldValues) {
@@ -572,7 +572,7 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         free(copiedFieldKeySizes);
         free(clonedHeader);
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     for (int i = 0; i < encodedDataSize; i++) {
         copiedEncodedData[i] = encodedData[i];

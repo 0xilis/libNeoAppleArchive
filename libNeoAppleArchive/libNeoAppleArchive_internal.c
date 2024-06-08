@@ -23,7 +23,7 @@ char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
     FILE *fp = fopen(signedShortcutPath,"r");
     if (!fp) {
         fprintf(stderr,"libNeoAppleArchive: failed to find path\n");
-        return 0;
+        return NULL;
     }
     fseek(fp, 0, SEEK_END);
     size_t binary_size = ftell(fp);
@@ -36,7 +36,7 @@ char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
     if (bytesRead < binary_size) {
         free(aeaShortcutArchive);
         NEO_AA_LogError("failed to read the entire file.\n");
-        return 0;
+        return NULL;
     }
     return aeaShortcutArchive;
 }
@@ -48,8 +48,8 @@ internal_do_not_call_memrchr_fast_loop:
     i--;
     if (s[i] == c) {return (s+i);};
     if (i != 0) {goto internal_do_not_call_memrchr_fast_loop;};
-    /* Error, return 0 */
-    return 0;
+    /* Error, return NULL */
+    return NULL;
 }
 
 void internal_do_not_call_apply_xattr_blob_to_path(uint8_t *blob, size_t blobSize, const char *path) {
