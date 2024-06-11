@@ -15,7 +15,8 @@ Limited functions for messing around with headers and extracting apple archives.
 ### Roadmap:
 
 - Support all compression types for Apple Archive
-- Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` profile.
+- Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` and `AEA_PROFILE__HKDF_SHA256_AESCTR_HMAC__SYMMETRIC__NONE` profiles.
+- An "IPSWDecrypt" CLI tool for Linux and Darwin platforms that can decrypt IPSW/OTA AEAs.
 - Convienience functions for archiving / extracting files and directories.
 - Making code more readable
 - CLI for macOS/Linux (Will be on a seperate repo)
