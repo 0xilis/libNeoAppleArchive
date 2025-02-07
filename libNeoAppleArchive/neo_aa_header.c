@@ -98,10 +98,10 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         header->fieldCount = 0;
         return header;
     }
-    uint32_t *fieldKeys = malloc(sizeof(uint32_t) * 1);
+    uint32_t *fieldKeys = malloc(sizeof(uint32_t));
     char *fieldTypes = malloc(1);
-    size_t *fieldKeySizes = malloc(sizeof(size_t) * 1);
-    void **fieldKeyValues = malloc(sizeof(void *) * 1);
+    size_t *fieldKeySizes = malloc(sizeof(size_t));
+    void **fieldKeyValues = malloc(sizeof(void *));
     /* now, fill with AAFieldKeys */
     uint32_t currentPos = 6;
     uint32_t fieldCount = 0;
