@@ -710,6 +710,7 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         offset += (header->headerSize + item->encodedBlobDataSize);
     }
     if (NEO_AA_COMPRESSION_LZFSE == algorithm) {
+        /* TODO: This code sucks. */
         uint8_t *compressed = malloc(archiveSize + 100);
         if (!compressed) {
             NEO_AA_LogError("not enough memory to compress\n");
@@ -726,7 +727,8 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         ptr->compressedSize = FLIP_32((uint32_t)compressedSize);
         free(buffer);
         write(fd, compressed - sizeof(struct neo_pbzx_archived_directory_header), compressedSize + sizeof(struct neo_pbzx_archived_directory_header));
-        free(compressed);
+        /* Go back to header since this is the pointer malloc gave us */
+        free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
         return 1;
     }
     NEO_AA_LogError("this algorithm is currently not supported\n");
