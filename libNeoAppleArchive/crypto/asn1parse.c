@@ -60,20 +60,23 @@ int raw_ecdsa_p256_signature_from_asn1(uint8_t *prologueSignature, size_t maxSiz
          */
         return -1;
     }
+    prologueSignature += 4;
     uint8_t zeroBytes = prologueSignatureRSize - 32;
     if (zeroBytes) {
         /* r is 0x21, double check that bits are 0 */
         for (int i = 0; i < zeroBytes; i++) {
-            if (prologueSignature[i+4]) {
+            if (prologueSignature[i]) {
                 return -1;
             }
         }
     }
     for (int i = 0; i < 32; i++) {
         /* Fill with r value */
-        sig[i] = prologueSignature[i+zeroBytes+4];
+        sig[i] = prologueSignature[i+zeroBytes];
     }
-    if (prologueSignature[prologueSignatureRSize+4] != 0x02) {
+    /* Move to s of prologue signature */
+    prologueSignature += prologueSignatureRSize;
+    if (prologueSignature[0] != 0x02) {
         /*
          * Signature should be r|s. s is an integer.
          * 02 is what specifies that the data is an integer.
@@ -81,7 +84,7 @@ int raw_ecdsa_p256_signature_from_asn1(uint8_t *prologueSignature, size_t maxSiz
          */
         return -1;
     }
-    uint8_t prologueSignatureSSize = prologueSignature[prologueSignatureRSize+5];
+    uint8_t prologueSignatureSSize = prologueSignature[1];
     if (prologueSignatureSSize < 32) {
         /*
          * S *must* be 256 bits.
@@ -99,14 +102,14 @@ int raw_ecdsa_p256_signature_from_asn1(uint8_t *prologueSignature, size_t maxSiz
     if (zeroBytes) {
         /* s is 0x21, double check that bits are 0 */
         for (int i = 0; i < zeroBytes; i++) {
-            if (prologueSignature[i+6+prologueSignatureRSize]) {
+            if (prologueSignature[i+2]) {
                 return -1;
             }
         }
     }
     for (int i = 32; i < 64; i++) {
         /* Fill with s value */
-        sig[i] = prologueSignature[i+6+prologueSignatureRSize+zeroBytes];
+        sig[i] = prologueSignature[i+2+zeroBytes];
     }
     /* sig should now be r|s */
     return 0;
