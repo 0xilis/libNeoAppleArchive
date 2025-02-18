@@ -32,6 +32,6 @@ Limited functions for messing around with headers and extracting apple archives.
 
 This is not a reimplementation of libAppleArchive, rather it's own library, created from the ground up. It is not compatible with libAppleArchive APIs, look at the header and code for clues. There is also docs available at `docs/` for types and functions.
 
-liblzfse is owned by Apple Inc. Find it here: [https://github.com/lzfse/lzfse](https://github.com/lzfse/lzfse). Currently a compiled version is statically linked at libNeoAppleArchive/compression/lzfse/lzfse.a for macOS, but you can just compile it yourself on Linux and replace it. In the future, it will be a submodule rather than pre-compiled.
+liblzfse is owned by Apple Inc. It is added as a submodule in `libNeoAppleArchive/compression/lzfse`, and the Makefile builds it into `build/lzfse`.
 
 ZLIB is not linked in the final executable line liblzfse but rather dynamically linked, as it is already on the OS itself.
