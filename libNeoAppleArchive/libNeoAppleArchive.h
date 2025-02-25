@@ -94,6 +94,9 @@ void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char 
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item);
 NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data);
 NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSize, uint8_t *data);
+NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path);
+int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm, int fd);
+void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algorithm, const char *path);
 
 void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath);
 
