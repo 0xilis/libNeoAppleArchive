@@ -33,7 +33,7 @@ typedef enum {
 /* Do not manually access items of neo_aea_archive_impl !!! They are subject to change!!! */
 struct neo_aea_archive_impl {
     size_t encodedDataSize;
-    char *encodedData;
+    uint8_t *encodedData;
     /*
      * In the future for public use,
      * We should probably implement field keys into

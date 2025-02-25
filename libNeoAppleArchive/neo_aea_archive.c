@@ -13,6 +13,8 @@
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
+#include "neo_aea_archive.h"
+#include "../build/lzfse/include/lzfse.h"
 
 NeoAEAArchive neo_aea_archive_with_path(const char *path) {
     NEO_AA_NullParamAssert(path);
@@ -62,7 +64,7 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
         return 0;
     }
     fclose(fp);
-    aeaArchive->encodedData = aeaShortcutArchive;
+    aeaArchive->encodedData = (uint8_t *)aeaShortcutArchive;
     aeaArchive->profile = (NeoAEAProfile)(*((uint8_t*)(aeaShortcutArchive + 4)));
     return aeaArchive;
 }
@@ -145,10 +147,36 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
         NEO_AA_ErrorHeapAlloc();
         return 0;
     }
-    size_t decompressedBytes = compression_decode_buffer(encodedAppleArchive, archivedDirSize, aaLZFSEPtr, compressedSize, 0, COMPRESSION_LZFSE);
-    if (decompressedBytes != archivedDirSize) {
+    /* Get compression algo (very likely lzfse) */
+    char compressionAlgo = *(encodedData + 0x104);
+    /*
+     * - = None
+     * 4 = LZ4
+     * b = LZBITMAP
+     * e = LZFSE
+     * f = LZVN
+     * x = LZMA
+     * z = ZLIB
+     */
+    size_t decompressedBytes;
+    if (compressionAlgo == 'e') {
+        /* LZFSE compressed */
+        decompressedBytes = lzfse_decode_buffer(encodedAppleArchive, archivedDirSize, aaLZFSEPtr, compressedSize, 0);
+        if (decompressedBytes != archivedDirSize) {
+            NEO_AA_LogError("failed to decompress LZFSE data\n");
+            free(encodedAppleArchive);
+            return 0;
+        }
+    /* i forgot which one it is so im doing both */
+    } else if ((compressionAlgo == '-') || (compressionAlgo == 0)) {
+        /* No compression */
+        decompressedBytes = compressedSize;
+        /* copy entire aaLZFSEPtr buffer to encodedAppleArchive */
+        memcpy(encodedAppleArchive, aaLZFSEPtr, compressedSize);
+    } else {
+        /* Not yet supported */
+        NEO_AA_LogErrorF("compression algorithm %02x not yet supported\n", compressionAlgo);
         free(encodedAppleArchive);
-        NEO_AA_LogError("failed to decompress LZFSE data\n");
         return 0;
     }
     return neo_aa_archive_plain_create_with_encoded_data(decompressedBytes, encodedAppleArchive);
