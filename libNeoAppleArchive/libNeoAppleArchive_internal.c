@@ -1,6 +1,6 @@
 /*
  *  libNeoAppleArchive_internal.c
- *  libAppleArchive
+ *  libNeoAppleArchive
  *
  *  Created by Snoolie Keffaber on 2024/04/22.
  */
