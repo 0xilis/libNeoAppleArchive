@@ -12,10 +12,10 @@ output: $(buildDir)
 	$(MAKE) -C $(LZFSE_DIR) install INSTALL_PREFIX=$(BUILD_DIR)
 	@ # Build libNeoAppleArchive.a
 	@echo "building libNeoAppleArchive..."
-	@$(CC) -c libNeoAppleArchive/*.c -Os
-	@mv neo_aa_header.o build/obj/neo_aa_header.o
-	@mv libNeoAppleArchive_internal.o build/obj/libNeoAppleArchive_internal.o
-	@mv libNeoAppleArchive.o build/obj/libNeoAppleArchive.o
+	@$(CC) -c libNeoAppleArchive/neo_aa_header.c -o build/obj/neo_aa_header.o -Os
+	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive_internal.c -o build/obj/libNeoAppleArchive_internal.o -Os
+	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive.c -o build/obj/libNeoAppleArchive.o -Os
+	@$(CC) -c libNeoAppleArchive/neo_aea_archive.c -o build/obj/neo_aea_archive.o -Os
 	@ar rcs build/usr/lib/libNeoAppleArchive.a build/obj/*.o
 
 $(buildDir):

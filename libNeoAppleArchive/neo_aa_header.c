@@ -1,9 +1,9 @@
-//
-//  neo_aa_header.c
-//  libAppleArchive
-//
-//  Created by Snoolie Keffaber on 2024/04/24.
-//
+/*
+ *  neo_aa_header.c
+ *  libNeoAppleArchive
+ *
+ *  Created by Snoolie Keffaber on 2024/04/24.
+ */
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"

@@ -1,9 +1,9 @@
-//
-//  asn1parse.c
-//  libNeoAppleArchive
-//
-//  Created by Snoolie Keffaber on 2024/05/09.
-//
+/*
+ *  asn1parse.c
+ *  libNeoAppleArchive
+ *
+ *  Created by Snoolie Keffaber on 2024/05/09.
+ */
 
 #include "asn1parse.h"
 

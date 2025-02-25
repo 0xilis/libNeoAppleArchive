@@ -1,9 +1,9 @@
-//
-//  asn1parse.h
-//  libNeoAppleArchive
-//
-//  Created by Snoolie Keffaber on 2024/05/09.
-//
+/*
+ *  asn1parse.h
+ *  libNeoAppleArchive
+ *
+ *  Created by Snoolie Keffaber on 2024/05/09.
+ */
 
 /* ONLY for ECDSA-P256 signatures !!!! */
 
