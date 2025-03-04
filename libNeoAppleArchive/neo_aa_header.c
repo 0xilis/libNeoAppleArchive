@@ -467,12 +467,24 @@ void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t str
     memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
     newEncodedData[oldSize + 3] = 'P';
     memcpy(newEncodedData + oldSize + 4, &stringSize, 2);
-    strncpy(newEncodedData + oldSize + 6, s, stringSize);
+
+    /* Only copy string if it has a size */
+    if (stringSize) {
+        strncpy(newEncodedData + oldSize + 6, s, stringSize);
+    }
+
     header->encodedData = newEncodedData;
     header->headerSize = newSize;
     fieldKeySizes[fieldCount] = stringSize;
-    char *fieldValue = malloc(stringSize + 1);
-    strncpy(fieldValue, s, stringSize);
+
+    char *fieldValue;
+    if (stringSize) {
+        fieldValue = malloc(stringSize + 1);
+        strncpy(fieldValue, s, stringSize);
+    } else {
+        /* If stringSize is 0, string is NULL */
+        fieldValue = 0;
+    }
     newFieldValues[fieldCount] = fieldValue;
     newFieldTypes[fieldCount] = NEO_AA_FIELD_TYPE_STRING;
     newFieldKeys[fieldCount] = key;
