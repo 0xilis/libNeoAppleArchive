@@ -372,6 +372,41 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
     free(buffer);
 }
 
+uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize) {
+    NEO_AA_NullParamAssert(archive);
+    /* Ugly slow */
+    size_t archiveSize = neo_aa_archive_plain_outfile_size(archive);
+    if (!archiveSize) {
+        NEO_AA_LogError("failed to get outfile size\n");
+        return 0;
+    }
+    /* Now we know what the archive size will be, create it. */
+    char *buffer = malloc(archiveSize); /* buffer to return */
+    if (!buffer) {
+        NEO_AA_LogError("out of memory!\n");
+        return 0;
+    }
+    size_t offset = 0;
+    int itemCount = archive->itemCount;
+    NeoAAArchiveItem *items = archive->items;
+    for (int i = 0; i < itemCount; i++) {
+        NeoAAArchiveItem item = items[i];
+        NeoAAHeader header = item->header;
+        if (!header) {
+            NEO_AA_LogError("item does not hold a header\n");
+            return 0;
+        }
+        neo_aa_archive_item_write_to_buffer(item, buffer + offset);
+        offset += (header->headerSize + item->encodedBlobDataSize);
+    }
+
+    if (encodedDataSize) {
+        /* Only do this after we know nothing failed */
+        *encodedDataSize = archiveSize;
+    }
+    return (uint8_t *)buffer;
+}
+
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath) {
     NEO_AA_NullParamAssert(plainArchive);
     NEO_AA_NullParamAssert(filepath);

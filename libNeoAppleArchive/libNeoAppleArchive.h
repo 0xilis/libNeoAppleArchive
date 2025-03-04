@@ -89,6 +89,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
 void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount);
 void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive);
 void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer);
+uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize);
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd);
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath);
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item);
