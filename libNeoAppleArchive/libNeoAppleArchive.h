@@ -42,13 +42,13 @@ struct neo_aa_header_impl {
 
 typedef uint32_t NeoAAFieldType;
 
-typedef enum : uint32_t {
-    NEO_AA_FIELD_TYPE_FLAG = 0,
-    NEO_AA_FIELD_TYPE_UINT = 1,
-    NEO_AA_FIELD_TYPE_STRING = 2,
-    NEO_AA_FIELD_TYPE_HASH = 3,
-    NEO_AA_FIELD_TYPE_TIMESPEC = 4,
-    NEO_AA_FIELD_TYPE_BLOB = 5,
+typedef enum {
+    NEO_AA_FIELD_TYPE_FLAG = (uint32_t)0,
+    NEO_AA_FIELD_TYPE_UINT = (uint32_t)1,
+    NEO_AA_FIELD_TYPE_STRING = (uint32_t)2,
+    NEO_AA_FIELD_TYPE_HASH = (uint32_t)3,
+    NEO_AA_FIELD_TYPE_TIMESPEC = (uint32_t)4,
+    NEO_AA_FIELD_TYPE_BLOB = (uint32_t)5,
 } NeoAAFieldTypes;
 
 typedef struct neo_aa_header_impl * NeoAAHeader;
