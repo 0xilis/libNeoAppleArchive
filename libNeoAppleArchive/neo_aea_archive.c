@@ -148,7 +148,7 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
         return 0;
     }
     /* Get compression algo (very likely lzfse) */
-    char compressionAlgo = *(encodedData + 0x104);
+    char compressionAlgo = *(encodedData + authDataSize + 0x104);
     /*
      * - = None
      * 4 = LZ4
