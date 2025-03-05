@@ -529,6 +529,113 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
     free(fieldValue);
     
 }
+
+void neo_aa_header_add_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
+    NEO_AA_NullParamAssert(header);
+    internal_do_not_call_is_field_key_available(key);
+    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize));
+    size_t oldSize = header->headerSize;
+    size_t newSize = oldSize + 4 + fieldSize;
+    char *encodedData = header->encodedData;
+    uint32_t fieldCount = header->fieldCount;
+    char *newEncodedData = realloc(encodedData, newSize);
+    if (!newEncodedData) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+    uint32_t *newFieldKeys = realloc(header->fieldKeys, (fieldCount + 1) * sizeof(uint32_t));
+    if (!newFieldKeys) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+    char *newFieldTypes = realloc(header->fieldTypes, fieldCount + 1);
+    if (!newFieldTypes) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+    void **newFieldValues = realloc(header->fieldValues, (fieldCount + 1) * sizeof(void*));
+    if (!newFieldValues) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+    size_t *fieldKeySizes = realloc(header->fieldKeySizes, (fieldCount + 1) * sizeof(size_t));
+    if (!fieldKeySizes) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+    uint16_t newSizeDowncast = (uint16_t)newSize;
+    /* Update encodedData with new size */
+    memcpy(newEncodedData + 4, &newSizeDowncast, 2);
+    uint32_t dumbPatchworkFix = FLIP_32(key);
+    memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
+    newEncodedData[oldSize + 3] = internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize);
+    memcpy(newEncodedData + oldSize + 4, &value, fieldSize);
+    header->encodedData = newEncodedData;
+    header->headerSize = newSize;
+    fieldKeySizes[fieldCount] = fieldSize;
+    uint64_t *fieldValue = malloc(sizeof(time_t));
+    *fieldValue = value;
+    newFieldValues[fieldCount] = fieldValue;
+    newFieldTypes[fieldCount] = NEO_AA_FIELD_TYPE_TIMESPEC;
+    newFieldKeys[fieldCount] = key;
+    header->fieldCount = fieldCount + 1;
+    header->fieldValues = newFieldValues;
+    header->fieldKeys = newFieldKeys;
+    header->fieldTypes = newFieldTypes;
+    header->fieldKeySizes = fieldKeySizes;
+}
+
+void neo_aa_header_set_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
+    /* TODO: Add support for fixing encodedData with keys that become larger */
+    NEO_AA_NullParamAssert(header);
+    internal_do_not_call_is_field_key_available(key);
+    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize));
+    int keyIndex = neo_aa_header_get_field_key_index(header, key);
+    if (keyIndex == -1) {
+        neo_aa_header_add_field_timespec(header, key, fieldSize, value);
+        return;
+    }
+    size_t valueSize = neo_aa_header_get_field_size(header, keyIndex);
+    if (valueSize != fieldSize) {
+        /* TODO: This will probably be supported later but we need to reform the encodedData for this which is annoying */
+        NEO_AA_LogError("setting field key with different size\n");
+        return;
+    }
+    if (header->fieldTypes[keyIndex] != NEO_AA_FIELD_TYPE_TIMESPEC) {
+        NEO_AA_LogError("setting field key with different type\n");
+        return;
+    }
+    if (header->fieldKeySizes[keyIndex] != fieldSize) {
+        NEO_AA_LogError("setting field key with same type but different size, this is not yet supported but in the future it will be\n");
+        return;
+    }
+    void *encodedData = header->encodedData;
+    if (!encodedData) {
+        NEO_AA_LogError("header missing encoded data\n");
+        return;
+    }
+    uint64_t encodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
+    if (!encodedDataPos) {
+        NEO_AA_LogError("failed to find position of key in encoded data\n");
+        return;
+    }
+    void *valuePtr = header->fieldValues[keyIndex];
+    switch (fieldSize) {
+        case 8:
+            *(uint64_t *)valuePtr = value;
+            break;
+
+        case 12:
+            *(time_t *)valuePtr = value;
+            break;
+            
+        default:
+            NEO_AA_LogError("bad fieldSize\n");
+            return;
+    }
+    void *encodedValuePtr = encodedData + encodedDataPos + 4;
+    memcpy(encodedValuePtr, &value, fieldSize);
+}
     
 
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
