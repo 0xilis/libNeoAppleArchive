@@ -143,9 +143,9 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             }
             FILE *fp = fopen(pathName, "w");
             if (!fp) {
-                free(pathName);
                 free(appleArchive);
                 fprintf(stderr, "neo_aa_extract_aar_to_path: could not open pathName: %s\n",pathName);
+                free(pathName);
                 return;
             }
             uint8_t *fileData = currentHeader + headerSize;
