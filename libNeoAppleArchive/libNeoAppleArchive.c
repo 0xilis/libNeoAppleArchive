@@ -101,6 +101,9 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         }
         if (typEntryType == 'D') {
             /* Header for directory */
+#if defined(_WIN32) || defined(WIN32)
+            mkdir(pathName);
+#else
             mkdir(pathName, accessMode);
             stat(pathName, &st);
             uid_t fileUid = st.st_uid;
@@ -112,6 +115,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
             }
             chown(pathName, fileUid, fileGid);
+#endif
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
                 uint8_t *xattrBlob = currentHeader + headerSize;
@@ -148,6 +152,9 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             /* copy file data to buffer */
             fwrite(fileData, dataSize, 1, fp);
             fclose(fp);
+#if defined(_WIN32) || defined(WIN32)
+            /* Windows does not implement unix uid_t/gid_t */
+#else
             stat(pathName, &st);
             uid_t fileUid = st.st_uid;
             gid_t fileGid = st.st_gid;
@@ -161,6 +168,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             if (modIndex != -1) {
                 chmod(pathName, accessMode);
             }
+#endif
             size_t xatSize = 0;
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
@@ -415,10 +423,10 @@ void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char 
         NEO_AA_LogError("failed to open filepath\n");
         return;
     }
-#if defined(__linux__)
-    int fd = fileno(fp);
-#else
+#if defined(__APPLE__)
     int fd = fp->_file;
+#else
+    int fd = fileno(fp);
 #endif
     neo_aa_archive_plain_writefd(plainArchive, fd);
     fclose(fp);
@@ -511,10 +519,10 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
     fseek(fp, 0, SEEK_END);
     size_t binary_size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-#if defined(__linux__)
-    int fd = fileno(fp);
-#else
+#if defined(__APPLE__)
     int fd = fp->_file;
+#else
+    int fd = fileno(fp);
 #endif
     if (binary_size > (UINT32_MAX-6) || binary_size < 12) {
         fclose(fp);
@@ -778,10 +786,10 @@ void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algor
         NEO_AA_LogError("failed to open path\n");
         return;
     }
-#if defined(__linux__)
-    int fd = fileno(fp);
-#else
+#if defined(__APPLE__)
     int fd = fp->_file;
+#else
+    int fd = fileno(fp);
 #endif
     neo_aa_archive_plain_compress_writefd(plain, algorithm, fd);
     fclose(fp);

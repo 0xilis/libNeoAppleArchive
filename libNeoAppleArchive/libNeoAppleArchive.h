@@ -13,7 +13,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#if defined(__APPLE__) || defined(__linux__)
 #include <sys/xattr.h>
+#endif
 #include <time.h>
 #include <inttypes.h>
 
