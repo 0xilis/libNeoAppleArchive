@@ -127,7 +127,7 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
      * since we aren't 100% sure this aea will
      * have the default 256 segments per cluster
      */
-    memcpy(&postAuthData, encodedData + authDataSize, sizeof(struct aea_profile0_post_authData));
+    memcpy(&postAuthData, encodedData + authDataSize + 12, sizeof(struct aea_profile0_post_authData));
     /* Check root header */
     struct aea_root_header rootHeader = postAuthData.prerootHeader.rootHeader;
     char compressionAlgo = rootHeader.compressionAlgorithm;
