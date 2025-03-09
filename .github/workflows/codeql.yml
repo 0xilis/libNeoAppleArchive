@@ -1,0 +1,73 @@
+name: "CodeQL Advanced"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '39 0 * * 3'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - language: c-cpp
+          build-mode: manual
+        # Other languages can be added here as needed
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Initialize git submodules
+    - name: Initialize submodules
+      run: |
+        git submodule update --init --recursive
+
+    # Step to set up build environment and compile code
+    - name: Set up Clang and build the project
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang make
+
+        # Ensure submodules are built
+        cd libNeoAppleArchive/compression/lzfse
+        make  # Build the submodule (if it's necessary)
+
+        # Go back to the root directory and build the project
+        cd ../../..
+        make  # Build the main project
+
+    # List build artifacts
+    - name: List build artifacts
+      run: |
+        ls -R
+
+    # Initializes the CodeQL tools for scanning.
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: ${{ matrix.build-mode }}
+
+    # Create CodeQL database manually with --overwrite flag
+    - name: Create CodeQL database
+      run: |
+        ${CODEQL_DIST}/codeql database create /home/runner/work/_temp/codeql_databases/cpp --language=cpp --command="make" --overwrite
+
+    # Perform CodeQL analysis (only after the project has been built)
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
