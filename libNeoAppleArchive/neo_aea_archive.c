@@ -94,14 +94,18 @@ NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t enc
 }
 
 /*
- * neo_aa_archive_plain_with_neo_aea_archive
+ * neo_aea_archive_extract_data
  *
- * Gets the NeoAAArchivePlain from the NeoAEAArchive.
- * This does not validate signing. For this, use
- * neo_aa_archive_plain_with_neo_aea_archive_verify
+ * Extracts data from the AEA.
+ * This does not validate signing.
  */
-NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
+uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
+    /* TODO: Support more than 1 cluster, but this is only for >100mb files */
     NEO_AA_NullParamAssert(aea);
+    if (aea->profile) {
+        NEO_AA_LogError("neo_aa_archive_plain_with_neo_aea_archive should only be called on Profile 0 unencrypted profiles\n");
+        return 0;
+    }
     uint8_t *encodedData = (uint8_t *)aea->encodedData;
     NEO_AA_NullParamAssert(encodedData);
     size_t encodedDataSize = aea->encodedDataSize;
@@ -111,35 +115,62 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
     }
     uint32_t authDataSize = 0;
     memcpy(&authDataSize, encodedData + 0x8, 4);
-    uint32_t aaLzfseOffset = authDataSize + 0x495c;
-    if (aaLzfseOffset > encodedDataSize) {
-        NEO_AA_LogError("reached past encodedDataSize\n");
-        return 0;
-    }
-    /* Make sure that +0x495c didn't result in a integer overflow */
-    if (aaLzfseOffset < authDataSize) {
-        NEO_AA_LogError("aaLzfseOffset overflow\n");
-        return 0;
-    }
-    uint8_t *aaLZFSEPtr = encodedData + aaLzfseOffset;
-    /* Make sure we didn't overflow aaLZFSEPtr */
-    if (aaLZFSEPtr < encodedData) {
-        NEO_AA_LogError("aaLZFSEPtr overflow\n");
-        return 0;
-    }
+
     size_t archivedDirSize = 0; /* size of uncompressed LZFSE data of the Apple Archive */
-    size_t compressedSize = 0; /* size of the LZFSE compressed Apple Archive */
-    size_t encodedDataSize2 = 0; /* should be equal to encodedDataSize */
-    memcpy(&compressedSize, encodedData + authDataSize + 0x13c + 4, 4);
-    memcpy(&encodedDataSize2, encodedData + authDataSize + 0xec + 8, 4);
-    memcpy(&archivedDirSize, encodedData + authDataSize + 0xec, 4);
-    /* doing this check instead of only compressedSize+aaLzfseOffset in case integer overflow */
-    if (compressedSize > encodedDataSize) {
-        NEO_AA_LogError("compressedSize reaches past encodedData\n");
+
+    /* copy struct from encoded data */
+    struct aea_profile0_default_post_authData postAuthData = {0};
+    /* 
+     * We don't copy the final default cluster,
+     * since we aren't 100% sure this aea will
+     * have the default 256 segments per cluster
+     */
+    memcpy(&postAuthData, encodedData + authDataSize, sizeof(struct aea_profile0_default_post_authData) - sizeof(struct aea_default_cluster));
+    /* Check root header */
+    struct aea_root_header rootHeader = postAuthData.prerootHeader.rootHeader;
+    char compressionAlgo = rootHeader.compressionAlgorithm;
+    if (rootHeader.checksumAlgorithm != 2) {
+        NEO_AA_LogError("non sha256 checksum not yet supported\n");
         return 0;
     }
-    if ((compressedSize + aaLzfseOffset) > encodedDataSize) {
-        NEO_AA_LogError("compressedSize+offset reaches past encodedData\n");
+    /* Calculate where segment data is */
+    struct aea_segment_header *segment0Header = (struct aea_segment_header *)(encodedData + (sizeof(struct aea_profile0_default_post_authData) - sizeof(struct aea_default_cluster)) + 32);
+    int segments = 0;
+    uint32_t i;
+    struct aea_segment_header *segmentHeader = segment0Header;
+    /* Count segments and calculate archivedDirSize */
+    for (i = 0; i < rootHeader.segmentsPerCluster; i++) {
+        struct aea_segment_header _segmentHeader = *segmentHeader;
+        if (_segmentHeader.originalSize == 0 && _segmentHeader.compressedSize == 0) {
+            /* Empty segment */
+            break;
+        }
+        size_t archivedDirSizeOld = archivedDirSize;
+        archivedDirSize += _segmentHeader.originalSize;
+        if (archivedDirSize < archivedDirSizeOld) {
+            NEO_AA_LogError("archivedDirSize underflow\n");
+            return 0;
+        }
+        segments++;
+        segmentHeader += sizeof(struct aea_segment_header);
+    }
+    if (!segments) {
+        NEO_AA_LogError("aea cluster has 0 segments\n");
+        return 0;
+    }
+    int segmentOffset = (sizeof(struct aea_segment_header) * rootHeader.segmentsPerCluster);
+    if (segmentOffset < 0) {
+        NEO_AA_LogError("integer underflow in segmentOffset calculation\n");
+        return 0;
+    }
+    int clusterDataStart = (sizeof(struct aea_profile0_default_post_authData) - sizeof(struct aea_default_cluster)) + 32 + segmentOffset;
+    if (clusterDataStart < 0) {
+        NEO_AA_LogError("integer underflow in clusterDataStart calculation\n");
+        return 0;
+    }
+    clusterDataStart += 32 + (rootHeader.segmentsPerCluster * 32);
+    if (clusterDataStart < 0) {
+        NEO_AA_LogError("integer underflow in clusterDataStart calculation\n");
         return 0;
     }
     uint8_t *encodedAppleArchive = malloc(archivedDirSize);
@@ -147,37 +178,74 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
         NEO_AA_ErrorHeapAlloc();
         return 0;
     }
-    /* Get compression algo (very likely lzfse) */
-    char compressionAlgo = *(encodedData + authDataSize + 0x104);
-    /*
-     * - = None
-     * 4 = LZ4
-     * b = LZBITMAP
-     * e = LZFSE
-     * f = LZVN
-     * x = LZMA
-     * z = ZLIB
-     */
-    size_t decompressedBytes;
-    if (compressionAlgo == 'e') {
-        /* LZFSE compressed */
-        decompressedBytes = lzfse_decode_buffer(encodedAppleArchive, archivedDirSize, aaLZFSEPtr, compressedSize, 0);
-        if (decompressedBytes != archivedDirSize) {
-            NEO_AA_LogError("failed to decompress LZFSE data\n");
+    /* Get data (uncompressed segment 0 data append segment 1 data etc...) */
+    i = 0;
+    segmentHeader = segment0Header;
+    uint8_t *segmentPtr = encodedData + clusterDataStart;
+    size_t aarSize = 0;
+    for (i = 0; i < segments; i++) {
+        struct aea_segment_header _segmentHeader = *segmentHeader;
+        /*
+         * - = None
+         * 4 = LZ4
+         * b = LZBITMAP
+         * e = LZFSE
+         * f = LZVN
+         * x = LZMA
+         * z = ZLIB
+         */
+        size_t decompressedBytes;
+        /* 
+         * uncompressed data is either - or 0
+         * i forgot which one it is so im doing both
+         * however, even if the cluster follows a specific
+         * compression algorithm, segments over the specified
+         * segmentSize do not seem to be compressed.
+         */
+        int dataOffset = 0;
+        if ((compressionAlgo == '-') || (compressionAlgo == 0) || (_segmentHeader.compressedSize > rootHeader.segmentSize && _segmentHeader.compressedSize == _segmentHeader.originalSize)) {
+            /* No compression */
+            decompressedBytes = _segmentHeader.compressedSize;
+            /* copy entire aaLZFSEPtr buffer to encodedAppleArchive */
+            memcpy(encodedAppleArchive + dataOffset, segmentPtr, _segmentHeader.compressedSize);
+        } else if (compressionAlgo == 'e') {
+            /* LZFSE compressed */
+            decompressedBytes = lzfse_decode_buffer(encodedAppleArchive + dataOffset, archivedDirSize - dataOffset, segmentPtr, _segmentHeader.compressedSize, 0);
+            if (decompressedBytes != archivedDirSize) {
+                NEO_AA_LogError("failed to decompress LZFSE data\n");
+                free(encodedAppleArchive);
+                return 0;
+            }
+        } else {
+            /* Not yet supported */
+            NEO_AA_LogErrorF("compression algorithm %02x not yet supported\n", compressionAlgo);
             free(encodedAppleArchive);
             return 0;
         }
-    /* i forgot which one it is so im doing both */
-    } else if ((compressionAlgo == '-') || (compressionAlgo == 0)) {
-        /* No compression */
-        decompressedBytes = compressedSize;
-        /* copy entire aaLZFSEPtr buffer to encodedAppleArchive */
-        memcpy(encodedAppleArchive, aaLZFSEPtr, compressedSize);
-    } else {
-        /* Not yet supported */
-        NEO_AA_LogErrorF("compression algorithm %02x not yet supported\n", compressionAlgo);
-        free(encodedAppleArchive);
+        segmentPtr += _segmentHeader.compressedSize;
+        segmentHeader += sizeof(struct aea_segment_header);
+        dataOffset += _segmentHeader.compressedSize;
+        aarSize += decompressedBytes;
+    }
+    if (size) {
+        *size = aarSize;
+    }
+    return encodedAppleArchive;
+}
+
+/*
+ * neo_aa_archive_plain_with_neo_aea_archive
+ *
+ * Gets the NeoAAArchivePlain from the NeoAEAArchive.
+ * This does not validate signing. For this, use
+ * neo_aa_archive_plain_with_neo_aea_archive_verify
+ */
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
+    size_t aarSize;
+    uint8_t *encodedAppleArchive = neo_aea_archive_extract_data(aea, &aarSize);
+    if (encodedAppleArchive) {
+        NEO_AA_LogError("could not extract data from aea\n");
         return 0;
     }
-    return neo_aa_archive_plain_create_with_encoded_data(decompressedBytes, encodedAppleArchive);
+    return neo_aa_archive_plain_create_with_encoded_data(aarSize, encodedAppleArchive);
 }
