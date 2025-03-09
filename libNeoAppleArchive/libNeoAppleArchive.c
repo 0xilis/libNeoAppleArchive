@@ -173,7 +173,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 fchown(fd, fileUid, fileGid);
             }
             if (modIndex != -1) {
-                chmod(pathName, accessMode);
+                fchmod(fd, accessMode);
             }
 #endif
             size_t xatSize = 0;
