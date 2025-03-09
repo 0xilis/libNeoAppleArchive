@@ -136,7 +136,7 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
         return 0;
     }
     /* Calculate where segment data is */
-    struct aea_segment_header *segment0Header = (struct aea_segment_header *)(encodedData + (sizeof(struct aea_profile0_post_authData)) + HMacSHA256Size);
+    struct aea_segment_header *segment0Header = (struct aea_segment_header *)(encodedData + 12 + authDataSize + sizeof(struct aea_profile0_post_authData) + HMacSHA256Size + 16);
     int segments = 0;
     uint32_t i;
     struct aea_segment_header *segmentHeader = segment0Header;
@@ -165,12 +165,12 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
         NEO_AA_LogError("integer underflow in segmentOffset calculation\n");
         return 0;
     }
-    int clusterDataStart = (sizeof(struct aea_profile0_post_authData)) + HMacSHA256Size + segmentOffset;
+    int clusterDataStart = 12 + authDataSize + (sizeof(struct aea_profile0_post_authData)) + HMacSHA256Size + segmentOffset;
     if (clusterDataStart < 0) {
         NEO_AA_LogError("integer underflow in clusterDataStart calculation\n");
         return 0;
     }
-    clusterDataStart += HMacSHA256Size + (rootHeader.segmentsPerCluster * HMacSHA256Size);
+    clusterDataStart += HMacSHA256Size + (rootHeader.segmentsPerCluster * HMacSHA256Size) + 16;
     if (clusterDataStart < 0) {
         NEO_AA_LogError("integer underflow in clusterDataStart calculation\n");
         return 0;
@@ -185,6 +185,7 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
     segmentHeader = segment0Header;
     uint8_t *segmentPtr = encodedData + clusterDataStart;
     size_t aarSize = 0;
+    int dataOffset = 0;
     for (i = 0; i < segments; i++) {
         struct aea_segment_header _segmentHeader = *segmentHeader;
         /*
@@ -204,7 +205,6 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
          * compression algorithm, segments over the specified
          * segmentSize do not seem to be compressed.
          */
-        int dataOffset = 0;
         if ((compressionAlgo == '-') || (compressionAlgo == 0) || (_segmentHeader.compressedSize > rootHeader.segmentSize && _segmentHeader.compressedSize == _segmentHeader.originalSize)) {
             /* No compression */
             decompressedBytes = _segmentHeader.compressedSize;
