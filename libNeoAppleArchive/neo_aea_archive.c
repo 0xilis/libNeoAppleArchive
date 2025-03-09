@@ -38,10 +38,10 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
         return 0;
     }
     fseek(fp, 0, SEEK_END);
-    size_t binary_size = ftell(fp);
+    size_t binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    aeaArchive->encodedDataSize = binary_size;
-    char *aeaShortcutArchive = malloc(binary_size * sizeof(char));
+    aeaArchive->encodedDataSize = binarySize;
+    uint8_t *aeaShortcutArchive = malloc(binarySize);
     /*
      * Explained better in comment below, but
      * a process may write to a file while
@@ -55,10 +55,10 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
      * it doesn't contain any leftover memory
      * left.
      */
-    memset(aeaShortcutArchive, 0, binary_size * sizeof(char));
+    memset(aeaShortcutArchive, 0, binarySize);
     /* copy bytes to buffer */
-    size_t bytesRead = fread(aeaShortcutArchive, binary_size, 1, fp);
-    if (bytesRead < binary_size) {
+    size_t bytesRead = fread(aeaShortcutArchive, binarySize, 1, fp);
+    if (bytesRead < binarySize) {
         fclose(fp);
         free(aeaShortcutArchive);
         free(aeaArchive);
@@ -87,11 +87,24 @@ NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t enc
         NEO_AA_ErrorHeapAlloc();
         return 0;
     }
-    for (int i = 0; i < encodedDataSize; i++) {
-        encodedDataCopy[i] = encodedData[i];
-    }
-    aeaArchive->encodedData = (uint8_t *)encodedDataCopy;
+    memcpy(encodedDataCopy, encodedData, encodedDataSize);
+    aeaArchive->encodedData = encodedDataCopy;
     aeaArchive->profile = (NeoAEAProfile)(*((uint8_t *)encodedDataCopy + 4));
+    return aeaArchive;
+}
+
+NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
+    NEO_AA_NullParamAssert(encodedData);
+    NeoAEAArchive aeaArchive = malloc(sizeof(struct neo_aea_archive_impl));
+    if (!aeaArchive) {
+        NEO_AA_ErrorHeapAlloc();
+        return 0;
+    }
+    /* fill struct with 0 */
+    memset(aeaArchive, 0, sizeof(struct neo_aea_archive_impl));
+    aeaArchive->encodedDataSize = encodedDataSize;
+    aeaArchive->encodedData = encodedData;
+    aeaArchive->profile = (NeoAEAProfile)(*((uint8_t *)encodedData + 4));
     return aeaArchive;
 }
 

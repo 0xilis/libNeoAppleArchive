@@ -113,6 +113,7 @@ struct aea_profile0_post_authData {
 
 NeoAEAArchive neo_aea_archive_with_path(const char *path);
 NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
+NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);
 uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size);
 NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea);
 NeoAEAProfile neo_aea_archive_profile(NeoAEAArchive aea);
