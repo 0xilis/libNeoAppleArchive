@@ -264,3 +264,11 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
     }
     return neo_aa_archive_plain_create_with_encoded_data(aarSize, encodedAppleArchive);
 }
+
+void neo_aea_archive_destroy(NeoAEAArchive aea) {
+    NEO_AA_NullParamAssert(aea);
+    if (aea->encodedData) {
+        free(aea->encodedData);
+    }
+    free(aea);
+}

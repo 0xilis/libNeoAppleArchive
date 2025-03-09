@@ -117,5 +117,6 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
 uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size);
 NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea);
 NeoAEAProfile neo_aea_archive_profile(NeoAEAArchive aea);
+void neo_aea_archive_destroy(NeoAEAArchive aea);
 
 #endif /* neo_aea_archive_h */
