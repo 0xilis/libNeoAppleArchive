@@ -141,8 +141,8 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 fprintf(stderr, "neo_aa_extract_aar_to_path: dataSize overflow\n");
                 return;
             }
-            FILE *fp = fopen(pathName, "w");
-            if (!fp) {
+            int fd = open(pathName, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+            if (fd == -1) {
                 free(appleArchive);
                 fprintf(stderr, "neo_aa_extract_aar_to_path: could not open pathName: %s\n",pathName);
                 free(pathName);
@@ -150,8 +150,8 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             }
             uint8_t *fileData = currentHeader + headerSize;
             /* copy file data to buffer */
-            fwrite(fileData, dataSize, 1, fp);
-            fclose(fp);
+            write(fd, fileData, dataSize);
+            close(fd);
 #if defined(_WIN32) || defined(WIN32)
             /* Windows does not implement unix uid_t/gid_t */
 #else
@@ -164,9 +164,9 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             if (gidIndex != -1) {
                 fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
             }
-            chown(pathName, fileUid, fileGid);
+            fchown(fd, fileUid, fileGid);
             if (modIndex != -1) {
-                chmod(pathName, accessMode);
+                fchmod(fd, accessMode);
             }
 #endif
             size_t xatSize = 0;
