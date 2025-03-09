@@ -106,6 +106,11 @@ struct aea_profile0_default_post_authData {
     struct aea_default_cluster cluster0header;
 };
 
+struct aea_profile0_post_authData {
+    struct aea_sig_info sigInfo;
+    struct aea_preroot_header prerootHeader;
+};
+
 NeoAEAArchive neo_aea_archive_with_path(const char *path);
 NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
 uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size);

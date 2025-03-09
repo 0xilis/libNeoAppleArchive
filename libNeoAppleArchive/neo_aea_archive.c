@@ -16,6 +16,8 @@
 #include "neo_aea_archive.h"
 #include "../build/lzfse/include/lzfse.h"
 
+#define HMacSHA256Size 32
+
 NeoAEAArchive neo_aea_archive_with_path(const char *path) {
     NEO_AA_NullParamAssert(path);
     if (strlen(path) > 1024) {
@@ -119,13 +121,13 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
     size_t archivedDirSize = 0; /* size of uncompressed LZFSE data of the Apple Archive */
 
     /* copy struct from encoded data */
-    struct aea_profile0_default_post_authData postAuthData = {0};
+    struct aea_profile0_post_authData postAuthData = {0};
     /* 
      * We don't copy the final default cluster,
      * since we aren't 100% sure this aea will
      * have the default 256 segments per cluster
      */
-    memcpy(&postAuthData, encodedData + authDataSize, sizeof(struct aea_profile0_default_post_authData) - sizeof(struct aea_default_cluster));
+    memcpy(&postAuthData, encodedData + authDataSize, sizeof(struct aea_profile0_post_authData));
     /* Check root header */
     struct aea_root_header rootHeader = postAuthData.prerootHeader.rootHeader;
     char compressionAlgo = rootHeader.compressionAlgorithm;
@@ -134,7 +136,7 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
         return 0;
     }
     /* Calculate where segment data is */
-    struct aea_segment_header *segment0Header = (struct aea_segment_header *)(encodedData + (sizeof(struct aea_profile0_default_post_authData) - sizeof(struct aea_default_cluster)) + 32);
+    struct aea_segment_header *segment0Header = (struct aea_segment_header *)(encodedData + (sizeof(struct aea_profile0_post_authData)) + HMacSHA256Size);
     int segments = 0;
     uint32_t i;
     struct aea_segment_header *segmentHeader = segment0Header;
@@ -163,12 +165,12 @@ uint8_t *neo_aea_archive_extract_data(NeoAEAArchive aea, size_t *size) {
         NEO_AA_LogError("integer underflow in segmentOffset calculation\n");
         return 0;
     }
-    int clusterDataStart = (sizeof(struct aea_profile0_default_post_authData) - sizeof(struct aea_default_cluster)) + 32 + segmentOffset;
+    int clusterDataStart = (sizeof(struct aea_profile0_post_authData)) + HMacSHA256Size + segmentOffset;
     if (clusterDataStart < 0) {
         NEO_AA_LogError("integer underflow in clusterDataStart calculation\n");
         return 0;
     }
-    clusterDataStart += 32 + (rootHeader.segmentsPerCluster * 32);
+    clusterDataStart += HMacSHA256Size + (rootHeader.segmentsPerCluster * HMacSHA256Size);
     if (clusterDataStart < 0) {
         NEO_AA_LogError("integer underflow in clusterDataStart calculation\n");
         return 0;
