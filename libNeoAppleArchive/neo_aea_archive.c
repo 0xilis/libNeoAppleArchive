@@ -769,17 +769,15 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
     buf += 0x90;
     newaea->clusterLen = aea->encodedDataSize - (buf - aea->encodedData);
     // EXPENSIVE: copies all clusters
-    if (!alloc_memcpy(&data, buf, newaea->clusterLen)) {
-        return NULL;
-    }
     if (IS_ENCRYPTED(newaea->profileID)) {
+        if (!alloc_memcpy(&data, buf, newaea->clusterLen)) {
+            return NULL;
+        }
         newaea->encryptedClusters = data;
     } else {
         struct aea_root_header* rootHeader = &newaea->rootHeader;
         size_t off = 0, 
                clusterSize = sizeof(struct aea_cluster_header) * 10, 
-               numClusters = 0,
-               clusterIndex = 0,
                segmentHeaderSize = 8 + checksumSizes[rootHeader->checksumAlgorithm];
         int i = 0;
         newaea->clusters = malloc(clusterSize);
@@ -791,7 +789,7 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
         while (off < newaea->clusterLen) {
             // make new cluster struct (data field in segments not filled in)
             struct aea_cluster_header cluster = new_partial_cluster(
-                &data[off], 
+                &buf[off], 
                 rootHeader->segmentsPerCluster, 
                 rootHeader->checksumAlgorithm
             );
@@ -801,7 +799,9 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
             for (size_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
                 struct aea_segment_header* segment = &cluster.segments[i];
                 // EXPENSIVE -- up to 1 MB copied per segment!
-                alloc_memcpy(&segment->segmentData, &data[off], segment->compressedSize);
+                void* tmp;
+                alloc_memcpy(&tmp, &buf[off], segment->compressedSize);
+                segment->segmentData = tmp;
                 // all fields in segment are now fully setup, we can move to next segment
                 off += segment->compressedSize; // segment data
             }
@@ -816,8 +816,8 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
             }
             // off == next cluster header offset
         }
-        // now we should only be using memory that's the same size as the file size
     }
+    neo_aea_archive_destroy(aea);
     return newaea;
 }
 
