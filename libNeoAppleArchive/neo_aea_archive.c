@@ -469,7 +469,8 @@ uint8_t *neo_aea_archive_extract_data(
     /* TODO:
        * support other compression algorithms (lz4, lzbitmap, lzvn, lzma, zlib)
        * unit tests for all of these functions to make sure they work
-       * 
+       * more abstraction to make it easier to understand
+       * etc...
      */
     NEO_AA_NullParamAssert(aea);
     size_t aeaDataSize = 0; /* size of the AEA's (uncompressed) data */
@@ -501,10 +502,6 @@ uint8_t *neo_aea_archive_extract_data(
 
     if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
         if (!password || !passwordSize) {
-            return NULL;
-        }
-        void* scryptCTX = malloc(10);
-        if (!scryptCTX) {
             return NULL;
         }
         uint8_t* extendedSalt = password_key(aea->keyDerivationSalt);
@@ -559,7 +556,7 @@ uint8_t *neo_aea_archive_extract_data(
         aea->clusters = malloc(clusterSize);
         if (!aea->clusters) {
             NEO_AA_ErrorHeapAlloc();
-            return 0;
+            return NULL;
         }
         // no known number of clusters, so iterate until we reach the end
         while (off < aea->clusterLen) {
@@ -593,7 +590,7 @@ uint8_t *neo_aea_archive_extract_data(
                     segment->compressedSize
                 );
                 if (!decryptedSegment) {
-                    return 0;
+                    return NULL;
                 }
                 // direct assignment because the whole decrypted memory belongs to this single segment
                 segment->segmentData = decryptedSegment;
@@ -606,7 +603,7 @@ uint8_t *neo_aea_archive_extract_data(
                 aea->clusters = realloc(aea->clusters, clusterSize);
                 if (!aea->clusters) {
                     NEO_AA_ErrorHeapAlloc();
-                    return 0;
+                    return NULL;
                 }
             }
             // off == next cluster header offset
@@ -630,14 +627,14 @@ uint8_t *neo_aea_archive_extract_data(
             // https://stackoverflow.com/a/33948556
             if ((aeaDataSize + curSegmentHeader->originalSize) < aeaDataSize) {
                 NEO_AA_LogError("aeaDataSize overflow\n");
-                return 0;
+                return NULL;
             }
             aeaDataSize += curSegmentHeader->originalSize;
             numSegments++;
         }
         if (!numSegments) {
             NEO_AA_LogError("AEA cluster only has empty segments\n");
-            return 0;
+            return NULL;
         }
         /* Get data (uncompressed segment 0 data append segment 1 data etc...) */
         int dataOffset = 0;
@@ -663,7 +660,7 @@ uint8_t *neo_aea_archive_extract_data(
             if ((compressionAlgo == NEO_AEA_COMPRESSION_NONE) || curSegmentHeader->compressedSize == curSegmentHeader->originalSize) {
                 /* No compression */
                 decompressedBytes = curSegmentHeader->compressedSize;
-                /* copy entire aaLZFSEPtr buffer to aeaData */
+                /* copy entire segment data buffer to aeaData */
                 memcpy(&aeaData[dataOffset], curSegmentHeader->segmentData, curSegmentHeader->compressedSize);
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZFSE) {
                 /* LZFSE compressed */
@@ -677,13 +674,13 @@ uint8_t *neo_aea_archive_extract_data(
                 if (decompressedBytes != curSegmentHeader->originalSize) {
                     NEO_AA_LogError("failed to decompress LZFSE data\n");
                     free(aeaData);
-                    return 0;
+                    return NULL;
                 }
             } else {
                 /* Not yet supported */
                 NEO_AA_LogErrorF("compression algorithm %02x not yet supported\n", compressionAlgo);
                 free(aeaData);
-                return 0;
+                return NULL;
             }
             dataOffset += curSegmentHeader->originalSize;
             outBufferSize += decompressedBytes;
