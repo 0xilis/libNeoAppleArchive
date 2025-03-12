@@ -363,7 +363,16 @@ void* main_key(
     off += serialize_pubkey(senderPub, &context[off], len - off);
     off += serialize_pubkey(recPriv, &context[off], len - off);
     off += serialize_pubkey(sigPub, &context[off], len - off);
-    if (!hkdf_extract_and_expand_helper(aea->keyDerivationSalt, 0x20, (uint8_t *)symmKey, symmKeySize, (uint8_t *)context, 0x4c, mainKey, 32)) {
+    if (!hkdf_extract_and_expand_helper(
+            aea->keyDerivationSalt, 
+            0x20, 
+            (uint8_t *)symmKey, 
+            symmKeySize, 
+            (uint8_t *)context, 
+            len, 
+            mainKey, 
+            32
+        )) {
         return NULL;
     }
     return mainKey;
