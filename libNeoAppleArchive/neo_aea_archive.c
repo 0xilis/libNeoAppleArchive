@@ -259,6 +259,15 @@ __attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper
     return 1;
 }
 
+int alloc_memcpy(void** dst, void* src, size_t n) {
+    *dst = malloc(n);
+    if (!*dst) {
+        return 0;
+    }
+    memcpy(*dst, src, n);
+    return 1;
+}
+
 int get_encoded_size(EVP_PKEY* pkey) {
     size_t tmp;
     if (!pkey || !EVP_PKEY_get_raw_public_key(pkey, NULL, &tmp)) {
@@ -417,12 +426,12 @@ struct aea_segment_header new_partial_segment(uint8_t* decryptedSegment, int che
         .compressedSize = tmp->compressedSize
     };
     
-    segment.hash = malloc(checksumSize);
-    if (!segment.hash) {
+    void *tmpBuf;
+    if (!alloc_memcpy(&tmpBuf, &decryptedSegment[8], checksumSize)) {
         NEO_AA_ErrorHeapAlloc();
         return (struct aea_segment_header){};
     }
-    memcpy(segment.hash, &decryptedSegment[8], checksumSize);
+    segment.hash = tmpBuf;
 
     // to be initialized later
     segment.segmentData = NULL;
@@ -436,7 +445,7 @@ struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, int num
     struct aea_cluster_header cluster = (struct aea_cluster_header){0},
         errorCluster = cluster;
     size_t segmentHeaderSize = checksumSizes[checksumAlgorithm] + 8;
-    cluster.segments = malloc(numSegments * segmentHeaderSize);
+    cluster.segments = malloc(numSegments * sizeof(struct aea_segment_header));
     if (!cluster.segments) {
         NEO_AA_ErrorHeapAlloc();
         return errorCluster;
@@ -704,15 +713,6 @@ uint8_t *neo_aea_archive_extract_data(
         *size = outBufferSize;
     }
     return aeaData;
-}
-
-int alloc_memcpy(void** dst, void* src, size_t n) {
-    *dst = malloc(n);
-    if (!*dst) {
-        return 0;
-    }
-    memcpy(*dst, src, n);
-    return 1;
 }
 
 NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
