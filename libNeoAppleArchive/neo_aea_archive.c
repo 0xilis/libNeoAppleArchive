@@ -772,7 +772,52 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
     if (!alloc_memcpy(&data, buf, newaea->clusterLen)) {
         return NULL;
     }
-    newaea->encryptedClusters = data;
+    if (IS_ENCRYPTED(newaea->profileID)) {
+        newaea->encryptedClusters = data;
+    } else {
+        struct aea_root_header* rootHeader = &newaea->rootHeader;
+        size_t off = 0, 
+               clusterSize = sizeof(struct aea_cluster_header) * 10, 
+               numClusters = 0,
+               clusterIndex = 0,
+               segmentHeaderSize = 8 + checksumSizes[rootHeader->checksumAlgorithm];
+        int i = 0;
+        newaea->clusters = malloc(clusterSize);
+        if (!newaea->clusters) {
+            NEO_AA_ErrorHeapAlloc();
+            return NULL;
+        }
+        // no known number of clusters, so iterate until we reach the end
+        while (off < newaea->clusterLen) {
+            // make new cluster struct (data field in segments not filled in)
+            struct aea_cluster_header cluster = new_partial_cluster(
+                &data[off], 
+                rootHeader->segmentsPerCluster, 
+                rootHeader->checksumAlgorithm
+            );
+            off += segmentHeaderSize * rootHeader->segmentsPerCluster  // segment headers
+                +  0x20 * (1 + rootHeader->segmentsPerCluster); // HMACs
+            
+            for (size_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
+                struct aea_segment_header* segment = &cluster.segments[i];
+                // EXPENSIVE -- up to 1 MB copied per segment!
+                alloc_memcpy(&segment->segmentData, &data[off], segment->compressedSize);
+                // all fields in segment are now fully setup, we can move to next segment
+                off += segment->compressedSize; // segment data
+            }
+            newaea->clusters[i++] = cluster;
+            if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
+                clusterSize *= 2;
+                newaea->clusters = realloc(newaea->clusters, clusterSize);
+                if (!newaea->clusters) {
+                    NEO_AA_ErrorHeapAlloc();
+                    return NULL;
+                }
+            }
+            // off == next cluster header offset
+        }
+        // now we should only be using memory that's the same size as the file size
+    }
     return newaea;
 }
 
