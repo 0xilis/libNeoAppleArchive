@@ -17,8 +17,9 @@
 // can't do anything about imported submodules
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
-#include "../build/lzfse/include/lzfse.h"
+#include <lzfse.h>
 #pragma clang diagnostic pop
+#include <libzbitmap.h>
 #include <zlib.h>
 #include <assert.h>
 #include <openssl/aes.h>
@@ -814,6 +815,20 @@ uint8_t *neo_aea_archive_extract_data(
                 );
                 if (decompressedBytes != curSegmentHeader->originalSize) {
                     NEO_AA_LogError("Failed to decompress LZFSE data\n");
+                    free(aeaData);
+                    return NULL;
+                }
+            } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZBITMAP) {
+                size_t unused;
+                (void)unused;
+                if (zbm_decompress(
+                    &aeaData[dataOffset],
+                    curSegmentHeader->originalSize, 
+                    curSegmentHeader->segmentData,
+                    curSegmentHeader->compressedSize,
+                    &unused
+                ) < 0) {
+                    NEO_AA_LogError("Failed to decompress LZBITMAP data\n");
                     free(aeaData);
                     return NULL;
                 }

@@ -9,12 +9,15 @@
 #include "libNeoAppleArchive_internal.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
-#include "../build/lzfse/include/lzfse.h"
+#include <lzfse.h>
 #pragma clang diagnostic pop
 #include <zlib.h>
 #include <fcntl.h>
 
 void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiveSize, const char *outputPath) {
+    (void)appleArchive;
+    (void)appleArchiveSize;
+    (void)outputPath;
     printf("This function does not exist. Sorry!\n");
     return;
 }
