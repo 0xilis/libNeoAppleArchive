@@ -15,6 +15,7 @@
 #include "libNeoAppleArchive_internal.h"
 #include "neo_aea_archive.h"
 #include "../build/lzfse/include/lzfse.h"
+#include <assert.h>
 #include <openssl/aes.h>
 #include <openssl/kdf.h>
 #include <openssl/params.h>
@@ -335,16 +336,16 @@ uint8_t* calculate_hmac(
 
 uint8_t* decrypt_AES_256_CTR(uint8_t* key, uint8_t* data, size_t dataSize) {
     const EVP_CIPHER* cipher = EVP_aes_256_ctr();
-    uint8_t* decrypted = malloc(dataSize + EVP_CIPHER_block_size(cipher));
+    uint8_t* decrypted = malloc(dataSize);
     if (!decrypted) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     EVP_DecryptInit_ex(ctx, cipher, NULL, &key[32], &key[64]);
-    int outl = dataSize + EVP_CIPHER_block_size(cipher);
+    int outl = dataSize;
     EVP_DecryptUpdate(ctx, decrypted, &outl, data, dataSize);
-    outl = dataSize + EVP_CIPHER_block_size(cipher) - outl;
+    outl = dataSize - outl;
     EVP_DecryptFinal(ctx, decrypted, &outl);
     return decrypted;
 }
@@ -421,7 +422,7 @@ void* password_key(uint8_t* mainKey, size_t keySize) {
 }
 
 void* signature_encryption_key(uint8_t* mainKey, size_t keySize) {
-    void* derivationKey = do_hkdf("AEA_SEK", 7, mainKey, keySize);
+    void* derivationKey = do_hkdf("AEA_SEK", 7, mainKey, 32);
     return do_hkdf("AEA_SEK2", 8, derivationKey, keySize);
 }
 
@@ -429,21 +430,21 @@ void* root_header_key(uint8_t* mainKey, size_t keySize) {
     return do_hkdf("AEA_RHEK", 8, mainKey, keySize);
 }
 
-void* cluster_key(uint8_t* mainKey, int idx, size_t keySize) {
+void* cluster_key(uint8_t* mainKey, int idx) {
     char context[10];
     strcpy(context, "AEA_CK");
-    *(int *)&context[5] = idx;
-    return do_hkdf(context, 10, mainKey, keySize);
+    *(int *)&context[6] = idx;
+    return do_hkdf(context, 10, mainKey, 32);
 }
 
 void* cluster_header_key(uint8_t* clusterKey, size_t keySize) {
-    return do_hkdf("AEA_CHEK", 9, clusterKey, keySize);
+    return do_hkdf("AEA_CHEK", 8, clusterKey, keySize);
 }
 
 void* segment_key(uint8_t* clusterKey, int idx, size_t keySize) {
     char context[10];
     strcpy(context, "AEA_SK");
-    *(int *)&context[5] = idx;
+    *(int *)&context[6] = idx;
     return do_hkdf(context, 10, clusterKey, keySize);
 }
 
@@ -512,9 +513,8 @@ int decrypt_clusters(NewNeoAEAArchive aea, uint8_t* mainKey, struct aea_root_hea
     size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
     size_t off = 0, 
            clusterSize = sizeof(struct aea_cluster_header) * 10,
-           clusterIndex = 0,
            clusterDataLen = aea->clusterDataLen;
-    int i = 0;
+    int i = 0, isFinal = 0;
     aea->clusters = malloc(clusterSize);
     if (!aea->clusters) {
         NEO_AA_ErrorHeapAlloc();
@@ -523,10 +523,15 @@ int decrypt_clusters(NewNeoAEAArchive aea, uint8_t* mainKey, struct aea_root_hea
     aea->innerDataLen = 0;
     // no known number of clusters, so iterate until we reach the end
     while (off < clusterDataLen) {
-        uint8_t* clusterKey = cluster_key(mainKey, clusterIndex, keySize);
+        uint8_t* clusterKey = cluster_key(mainKey, i);
+
+        printf("clusterKey %d:\n", i);
+        DumpHex(clusterKey, 32);
 
         // decrypt current cluster
         uint8_t* clusterHeaderKey = cluster_header_key(clusterKey, keySize);
+        printf("clusterHeaderKey %d:\n", i);
+        DumpHex(clusterHeaderKey, keySize);
         uint8_t* decryptedCluster = decrypt_AES_256_CTR(
             clusterHeaderKey, 
             &encryptedClusters[off], 
@@ -546,7 +551,14 @@ int decrypt_clusters(NewNeoAEAArchive aea, uint8_t* mainKey, struct aea_root_hea
         
         for (size_t j = 0; j < rootHeader->segmentsPerCluster; j++) {
             struct aea_segment_header *segment = &cluster.segments[j];
+            if (!segment->compressedSize) {
+                isFinal = 1;
+                break;
+            }
             uint8_t *segmentKey = segment_key(clusterKey, j, keySize);
+            printf("segmentKey %zu:\n", j);
+            DumpHex(segmentKey, keySize);
+
             // EXPENSIVE -- up to 1 MB copied and decrypted per segment!
             uint8_t *decryptedSegment = decrypt_AES_256_CTR(
                 segmentKey, 
@@ -563,6 +575,9 @@ int decrypt_clusters(NewNeoAEAArchive aea, uint8_t* mainKey, struct aea_root_hea
             aea->innerDataLen += segment->originalSize;
         }
         aea->clusters[i++] = cluster;
+        if (isFinal) {
+            break;
+        }
         if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
             clusterSize *= 2;
             aea->clusters = realloc(aea->clusters, clusterSize);
