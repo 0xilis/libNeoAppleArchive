@@ -209,7 +209,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
 }
 
 __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_t contextLen, void *key, size_t outSize) {
-    void *derivedKey = malloc(512);
+    void *derivedKey = malloc(outSize);
     if (!derivedKey) {
         return NULL;
     }
