@@ -19,6 +19,7 @@
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #include "../build/lzfse/include/lzfse.h"
 #pragma clang diagnostic pop
+#include <zlib.h>
 #include <assert.h>
 #include <openssl/aes.h>
 #include <openssl/kdf.h>
@@ -161,10 +162,12 @@ __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_
 }
 
 /* Helper function to perform HKDF using OpenSSL */
-__attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper(const uint8_t *salt, size_t salt_len,
-                            const uint8_t *key, size_t key_len,
-                            const uint8_t *info, size_t info_len,
-                            uint8_t *out, size_t out_len) {
+__attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper(
+    const uint8_t *salt, size_t salt_len,
+    const uint8_t *key, size_t key_len,
+    const uint8_t *info, size_t info_len,
+    uint8_t *out, size_t out_len
+) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
     if (!ctx) {
         fprintf(stderr, "Failed to create HKDF context\n");
@@ -316,14 +319,10 @@ __attribute__((visibility ("hidden"))) void* main_key(
     off += serialize_pubkey(recPriv, &context[off], len - off);
     off += serialize_pubkey(sigPub, &context[off], len - off);
     if (!hkdf_extract_and_expand_helper(
-            aea->keyDerivationSalt, 
-            0x20, 
-            (uint8_t *)symmKey, 
-            symmKeySize, 
-            (uint8_t *)context, 
-            len, 
-            mainKey, 
-            32
+            aea->keyDerivationSalt,  0x20, 
+            (uint8_t *)symmKey, symmKeySize, 
+            (uint8_t *)context, len, 
+            mainKey, 32
         )) {
         return NULL;
     }
@@ -688,6 +687,7 @@ uint8_t *neo_aea_archive_extract_data(
     NEO_AA_NullParamAssert(aea);
 
     size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
+    EVP_PKEY* senderPub = NULL;
     if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
         symmKey = aea->profileDependent;
     } else if (HAS_SYMMETRIC_ENCRYPTION(aea->profileID)) {
@@ -697,10 +697,7 @@ uint8_t *neo_aea_archive_extract_data(
         }
         printf("symmKey:\n");
         DumpHex(symmKey, 32);
-    }
-
-    EVP_PKEY* senderPub = NULL;
-    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+    } else if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
         senderPub = EVP_PKEY_new_raw_public_key(NID_X9_62_prime256v1, NULL, aea->profileDependent, 65);
         if (!senderPub) {
             NEO_AA_LogError("senderPub not specified\n");
@@ -716,9 +713,7 @@ uint8_t *neo_aea_archive_extract_data(
             NEO_AA_LogError("Cannot derive symmKey\n");
             return NULL;
         }
-    }
-
-    if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
+    } else if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
         if (!password || !passwordSize) {
             NEO_AA_LogError("Password not specified\n");
             return NULL;
@@ -736,6 +731,8 @@ uint8_t *neo_aea_archive_extract_data(
     uint8_t* mainKey = main_key(aea, senderPub, recPriv, signaturePub, symmKey, symmKeySize);
     printf("mainKey:\n");
     DumpHex(mainKey, 32);
+
+    /* Calculate Root Header Key (AEA_RHEK) */
     if (IS_ENCRYPTED(aea->profileID)) {
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
         printf("rootHeaderKey:\n");
@@ -747,7 +744,7 @@ uint8_t *neo_aea_archive_extract_data(
         );
     }
 
-    /* Check root header */
+    /* Check Root Header */
     struct aea_root_header* rootHeader = &aea->rootHeader;
     char compressionAlgo = rootHeader->compressionAlgorithm;
     if (rootHeader->checksumAlgorithm != 2) {
@@ -756,7 +753,11 @@ uint8_t *neo_aea_archive_extract_data(
     }
 
     if (IS_ENCRYPTED(aea->profileID)) {
-        // expensive!
+        /* EXPENSIVE:
+         * Decrypts every cluster and segment in the file and
+         * creates new structs for each of them in order to
+         * parse them in the right format
+         */
         decrypt_clusters(aea, mainKey, rootHeader, 8 + checksumSizes[rootHeader->checksumAlgorithm]);
     }
     // use aea->clusters, aea->numClusters and aea->innerDataLen from now on, as they are now decrypted and set
@@ -766,8 +767,7 @@ uint8_t *neo_aea_archive_extract_data(
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    size_t dataOffset = 0,
-           outBufferSize = 0;
+    size_t dataOffset = 0, outBufferSize = 0;
     for (size_t i = 0; i < aea->numClusters; i++) {
         struct aea_segment_header *segmentHeaders = aea->clusters[i].segments;
         /* Get data (segment 0 decompressed data + segment 1 decompressed data + etc...) */
@@ -789,7 +789,7 @@ uint8_t *neo_aea_archive_extract_data(
              */
 
             /* 
-             * Uncompressed data is -
+             * Uncompressed data is '-'
              * However, even if the cluster follows a specific
              * compression algorithm, segments that have a 
              * larger size when compressed are stored uncompressed.
@@ -798,7 +798,11 @@ uint8_t *neo_aea_archive_extract_data(
                 /* No compression */
                 decompressedBytes = curSegmentHeader->compressedSize;
                 /* copy entire segment data buffer to aeaData */
-                memcpy(&aeaData[dataOffset], curSegmentHeader->segmentData, curSegmentHeader->compressedSize);
+                memcpy(
+                    &aeaData[dataOffset], 
+                    curSegmentHeader->segmentData, 
+                    curSegmentHeader->compressedSize
+                );
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZFSE) {
                 /* LZFSE compressed */
                 decompressedBytes = lzfse_decode_buffer(
@@ -810,6 +814,17 @@ uint8_t *neo_aea_archive_extract_data(
                 );
                 if (decompressedBytes != curSegmentHeader->originalSize) {
                     NEO_AA_LogError("Failed to decompress LZFSE data\n");
+                    free(aeaData);
+                    return NULL;
+                }
+            } else if (compressionAlgo == NEO_AEA_COMPRESSION_ZLIB) {
+                if (uncompress(
+                    &aeaData[dataOffset],
+                    curSegmentHeader->originalSize,
+                    curSegmentHeader->segmentData,
+                    curSegmentHeader->compressedSize
+                )) {
+                    NEO_AA_LogError("Failed to decompress ZLIB data\n");
                     free(aeaData);
                     return NULL;
                 }
