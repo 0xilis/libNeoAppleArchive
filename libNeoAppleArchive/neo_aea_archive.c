@@ -818,9 +818,10 @@ uint8_t *neo_aea_archive_extract_data(
                     return NULL;
                 }
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_ZLIB) {
+                size_t originalSize = curSegmentHeader->originalSize;
                 if (uncompress(
                     &aeaData[dataOffset],
-                    curSegmentHeader->originalSize,
+                    &originalSize,
                     curSegmentHeader->segmentData,
                     curSegmentHeader->compressedSize
                 )) {
