@@ -1,3 +1,4 @@
+
 /*
  *  neo_aea_archive.h
  *  libNeoAppleArchive
@@ -222,9 +223,9 @@ struct aea_profile0_post_authData {
     struct aea_preroot_header prerootHeader;
 };
 
-NeoAEAArchive neo_aea_archive_with_path(const char *path);
-NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
-NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);
+NewNeoAEAArchive neo_aea_archive_with_path(const char *path);
+NewNeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
+NewNeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);
 uint8_t *neo_aea_archive_extract_data(
     NewNeoAEAArchive aea, 
     size_t *size, 
@@ -233,7 +234,7 @@ uint8_t *neo_aea_archive_extract_data(
     uint8_t* symmKey, size_t symmKeySize,
     uint8_t* password, size_t passwordSize
 );
-NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea);
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NewNeoAEAArchive aea);
 NeoAEAProfile neo_aea_archive_profile(NeoAEAArchive aea);
 void neo_aea_archive_destroy(NeoAEAArchive aea);
 
