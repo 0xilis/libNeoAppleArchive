@@ -14,7 +14,11 @@
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
 #include "neo_aea_archive.h"
+// can't do anything about imported submodules
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstrict-prototypes"
 #include "../build/lzfse/include/lzfse.h"
+#pragma clang diagnostic pop
 #include <assert.h>
 #include <openssl/aes.h>
 #include <openssl/kdf.h>
@@ -318,7 +322,7 @@ int serialize_pubkey(EVP_PKEY* pkey, uint8_t* buf, size_t len) {
 }
 
 uint8_t* calculate_hmac(
-    uint8_t* key, size_t keySize,
+    uint8_t* key,
     uint8_t* data, size_t dataSize,
     uint8_t* salt, size_t saltSize
 ) {
@@ -389,7 +393,7 @@ void* main_key(
                 + get_encoded_size(senderPub) 
                 + get_encoded_size(recPriv) 
                 + get_encoded_size(sigPub), 
-           tmp, off = 11;
+           off = 11;
     uint8_t *context = malloc(len),
             *mainKey = malloc(32);
     if (!context || !mainKey) {
@@ -459,7 +463,7 @@ struct aea_segment_header new_partial_segment(uint8_t* decryptedSegment, int che
     void *tmpBuf;
     if (!alloc_memcpy(&tmpBuf, &decryptedSegment[8], checksumSize)) {
         NEO_AA_ErrorHeapAlloc();
-        return (struct aea_segment_header){};
+        return (struct aea_segment_header){0};
     }
     segment.hash = tmpBuf;
 
@@ -480,8 +484,8 @@ struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, uint8_t
         NEO_AA_ErrorHeapAlloc();
         return errorCluster;
     }
-    struct aea_segment_header emptySegment = (struct aea_segment_header){};
-    for (size_t i = 0; i < numSegments; i++) {
+    struct aea_segment_header emptySegment = (struct aea_segment_header){0};
+    for (int i = 0; i < numSegments; i++) {
         struct aea_segment_header segment = new_partial_segment(decryptedCluster, checksumAlgorithm);
         if (!memcmp(&segment, &emptySegment, sizeof(struct aea_segment_header))) {
             return errorCluster;
@@ -491,7 +495,7 @@ struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, uint8_t
     }
     memcpy(cluster.nextClusterHMAC, segmentMACs, 0x20);
     segmentMACs += 0x20;
-    for (size_t i = 0; i < numSegments; i++) {
+    for (int i = 0; i < numSegments; i++) {
         struct aea_segment_header* segment = &cluster.segments[i];
         memcpy(segment->segmentHMAC, segmentMACs, 0x20);
         segmentMACs += 0x20;
@@ -697,7 +701,7 @@ uint8_t *neo_aea_archive_extract_data(
     }
     size_t dataOffset = 0,
            outBufferSize = 0;
-    for (int i = 0; i < aea->numClusters; i++) {
+    for (size_t i = 0; i < aea->numClusters; i++) {
         struct aea_segment_header *segmentHeaders = aea->clusters[i].segments;
         /* Get data (segment 0 decompressed data + segment 1 decompressed data + etc...) */
         for (uint32_t j = 0; j < rootHeader->segmentsPerCluster; j++) {
