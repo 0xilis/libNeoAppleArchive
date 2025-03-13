@@ -464,7 +464,7 @@ NewNeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, 
     };
     aea->profileDependent = data;
     buf += size;
-    memcpy((char *)aea + 12 + 3 * sizeof(uint8_t *), buf, 0x90);
+    memcpy(aea + offsetof(struct aea_archive, keyDerivationSalt), buf, 0x90);
     buf += 0x90;
     aea->clusterDataLen = encodedDataSize - (buf - encodedData);
     // EXPENSIVE: copies all clusters
