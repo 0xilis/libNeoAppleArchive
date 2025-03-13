@@ -23,6 +23,35 @@
 
 #define HMacSHA256Size 32
 
+void DumpHex(const void* data, size_t size) {
+	char ascii[17];
+	size_t i, j;
+	ascii[16] = '\0';
+	for (i = 0; i < size; ++i) {
+		printf("%02X ", ((unsigned char*)data)[i]);
+		if (((unsigned char*)data)[i] >= ' ' && ((unsigned char*)data)[i] <= '~') {
+			ascii[i % 16] = ((unsigned char*)data)[i];
+		} else {
+			ascii[i % 16] = '.';
+		}
+		if ((i+1) % 8 == 0 || i+1 == size) {
+			printf(" ");
+			if ((i+1) % 16 == 0) {
+				printf("|  %s \n", ascii);
+			} else if (i+1 == size) {
+				ascii[(i+1) % 16] = '\0';
+				if ((i+1) % 16 <= 8) {
+					printf(" ");
+				}
+				for (j = (i+1) % 16; j < 16; ++j) {
+					printf("   ");
+				}
+				printf("|  %s \n", ascii);
+			}
+		}
+	}
+}
+
 NeoAEAArchive neo_aea_archive_with_path(const char *path) {
     NEO_AA_NullParamAssert(path);
     if (strlen(path) > 1024) {
@@ -178,7 +207,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     return hmac;
 }
 
-__attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_t contextLen, void *key) {
+__attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_t contextLen, void *key, size_t outSize) {
     void *derivedKey = malloc(512);
     if (!derivedKey) {
         return NULL;
@@ -201,7 +230,7 @@ __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_
     if (EVP_KDF_CTX_set_params(ctx, params) <= 0) {
         return NULL;
     }
-    if (EVP_KDF_derive(ctx, derivedKey, 32, NULL) <= 0) {
+    if (EVP_KDF_derive(ctx, derivedKey, outSize, NULL) <= 0) {
         return NULL;
     }
     EVP_KDF_CTX_free(ctx);
@@ -355,11 +384,11 @@ void* main_key(
     EVP_PKEY* sigPub, 
     uint8_t* symmKey, size_t symmKeySize
 ) {
-    size_t len = 12 
+    size_t len = 11 
                 + get_encoded_size(senderPub) 
                 + get_encoded_size(recPriv) 
                 + get_encoded_size(sigPub), 
-           tmp, off = 12;
+           tmp, off = 11;
     uint8_t *context = malloc(len),
             *mainKey = malloc(32);
     if (!context || !mainKey) {
@@ -367,8 +396,8 @@ void* main_key(
         return NULL;
     }
     strcpy((char *)context, "AEA_AMK");
-    *(uint32_t *)&context[8] = aea->profileID; // is actually an uint24_t
-    context[11] = aea->scryptStrength;
+    *(uint32_t *)&context[7] = aea->profileID; // is actually an uint24_t
+    context[10] = aea->scryptStrength;
     off += serialize_pubkey(senderPub, &context[off], len - off);
     off += serialize_pubkey(recPriv, &context[off], len - off);
     off += serialize_pubkey(sigPub, &context[off], len - off);
@@ -387,35 +416,35 @@ void* main_key(
     return mainKey;
 }
 
-void* password_key(uint8_t* mainKey) {
-    return do_hkdf("AEA_SCRYPT", 10, mainKey);
+void* password_key(uint8_t* mainKey, size_t keySize) {
+    return do_hkdf("AEA_SCRYPT", 10, mainKey, keySize);
 }
 
-void* signature_encryption_key(uint8_t* mainKey) {
-    void* derivationKey = do_hkdf("AEA_SEK", 7, mainKey);
-    return do_hkdf("AEA_SEK2", 8, derivationKey);
+void* signature_encryption_key(uint8_t* mainKey, size_t keySize) {
+    void* derivationKey = do_hkdf("AEA_SEK", 7, mainKey, keySize);
+    return do_hkdf("AEA_SEK2", 8, derivationKey, keySize);
 }
 
-void* root_header_key(uint8_t* mainKey) {
-    return do_hkdf("AEA_RHEK", 8, mainKey);
+void* root_header_key(uint8_t* mainKey, size_t keySize) {
+    return do_hkdf("AEA_RHEK", 8, mainKey, keySize);
 }
 
-void* cluster_key(uint8_t* mainKey, int idx) {
+void* cluster_key(uint8_t* mainKey, int idx, size_t keySize) {
     char context[10];
     strcpy(context, "AEA_CK");
     *(int *)&context[5] = idx;
-    return do_hkdf(context, 10, mainKey);
+    return do_hkdf(context, 10, mainKey, keySize);
 }
 
-void* cluster_header_key(uint8_t* clusterKey) {
-    return do_hkdf("AEA_CHEK", 9, cluster_key);
+void* cluster_header_key(uint8_t* clusterKey, size_t keySize) {
+    return do_hkdf("AEA_CHEK", 9, clusterKey, keySize);
 }
 
-void* segment_key(uint8_t* clusterKey, int idx) {
+void* segment_key(uint8_t* clusterKey, int idx, size_t keySize) {
     char context[10];
     strcpy(context, "AEA_SK");
     *(int *)&context[5] = idx;
-    return do_hkdf(context, 10, clusterKey);
+    return do_hkdf(context, 10, clusterKey, keySize);
 }
 
 struct aea_segment_header new_partial_segment(uint8_t* decryptedSegment, int checksumAlgorithm) {
@@ -441,7 +470,7 @@ struct aea_segment_header new_partial_segment(uint8_t* decryptedSegment, int che
     return segment;
 }
 
-struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, int numSegments, int checksumAlgorithm) {
+struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, uint8_t* segmentMACs, int numSegments, int checksumAlgorithm) {
     struct aea_cluster_header cluster = (struct aea_cluster_header){0},
         errorCluster = cluster;
     size_t segmentHeaderSize = checksumSizes[checksumAlgorithm] + 8;
@@ -459,15 +488,95 @@ struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, int num
         decryptedCluster += segmentHeaderSize;
         cluster.segments[i] = segment;
     }
-    memcpy(cluster.nextClusterHMAC, decryptedCluster, 0x20);
-    decryptedCluster += 0x20;
+    memcpy(cluster.nextClusterHMAC, segmentMACs, 0x20);
+    segmentMACs += 0x20;
     for (size_t i = 0; i < numSegments; i++) {
         struct aea_segment_header* segment = &cluster.segments[i];
-        memcpy(segment->segmentHMAC, decryptedCluster, 0x20);
-        decryptedCluster += 0x20;
+        memcpy(segment->segmentHMAC, segmentMACs, 0x20);
+        segmentMACs += 0x20;
     }
     // all field initialized, return cluster
     return cluster;
+}
+
+// Cluster Decryption Routine
+/* 
+    During the execution of this function,
+    There is a possibility to use memory that is ~2x the file size
+    (one copy of the encrypted data, another of the decrypted)
+    Parallelization of decryption is possible given segment sizes
+        are precomputed beforehand.
+*/
+int decrypt_clusters(NewNeoAEAArchive aea, uint8_t* mainKey, struct aea_root_header* rootHeader, size_t segmentHeaderSize) {
+    uint8_t* encryptedClusters = aea->encryptedClusters;
+    size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
+    size_t off = 0, 
+           clusterSize = sizeof(struct aea_cluster_header) * 10,
+           clusterIndex = 0,
+           clusterDataLen = aea->clusterDataLen;
+    int i = 0;
+    aea->clusters = malloc(clusterSize);
+    if (!aea->clusters) {
+        NEO_AA_ErrorHeapAlloc();
+        return 0;
+    }
+    aea->innerDataLen = 0;
+    // no known number of clusters, so iterate until we reach the end
+    while (off < clusterDataLen) {
+        uint8_t* clusterKey = cluster_key(mainKey, clusterIndex, keySize);
+
+        // decrypt current cluster
+        uint8_t* clusterHeaderKey = cluster_header_key(clusterKey, keySize);
+        uint8_t* decryptedCluster = decrypt_AES_256_CTR(
+            clusterHeaderKey, 
+            &encryptedClusters[off], 
+            segmentHeaderSize * rootHeader->segmentsPerCluster
+        );
+
+        // make new cluster struct (data field in segments not filled in)
+        struct aea_cluster_header cluster = new_partial_cluster(
+            decryptedCluster, 
+            &encryptedClusters[off + (segmentHeaderSize * rootHeader->segmentsPerCluster)], 
+            rootHeader->segmentsPerCluster, 
+            rootHeader->checksumAlgorithm
+        );
+        off += segmentHeaderSize * rootHeader->segmentsPerCluster  // segment headers
+            +  0x20 * (1 + rootHeader->segmentsPerCluster); // HMACs
+        free(decryptedCluster); // already copied into the cluster struct, no longer required
+        
+        for (size_t j = 0; j < rootHeader->segmentsPerCluster; j++) {
+            struct aea_segment_header *segment = &cluster.segments[j];
+            uint8_t *segmentKey = segment_key(clusterKey, j, keySize);
+            // EXPENSIVE -- up to 1 MB copied and decrypted per segment!
+            uint8_t *decryptedSegment = decrypt_AES_256_CTR(
+                segmentKey, 
+                &encryptedClusters[off], 
+                segment->compressedSize
+            );
+            if (!decryptedSegment) {
+                return 0;
+            }
+            // direct assignment because the whole decrypted memory belongs to this single segment
+            segment->segmentData = decryptedSegment;
+            // all fields in segment are now fully setup, we can move to next segment
+            off += segment->compressedSize; // segment data
+            aea->innerDataLen += segment->originalSize;
+        }
+        aea->clusters[i++] = cluster;
+        if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
+            clusterSize *= 2;
+            aea->clusters = realloc(aea->clusters, clusterSize);
+            if (!aea->clusters) {
+                NEO_AA_ErrorHeapAlloc();
+                return 0;
+            }
+        }
+        // off == next cluster header offset
+    }
+    aea->numClusters = i;
+    free(encryptedClusters); // free encrypted clusters to not waste any more memory holding it
+    // now we should only be using memory that's the same size as the file size
+    return 1;
 }
 
 /*
@@ -491,20 +600,24 @@ uint8_t *neo_aea_archive_extract_data(
        * etc...
      */
     NEO_AA_NullParamAssert(aea);
-    size_t aeaDataSize = 0; /* size of the AEA's (uncompressed) data */
 
+    size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
     if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
         symmKey = aea->profileDependent;
     } else if (HAS_SYMMETRIC_ENCRYPTION(aea->profileID)) {
         if (!symmKey || symmKeySize != 32) {
+            NEO_AA_LogError("symmKey is not correct\n");
             return NULL;
         }
+        printf("symmKey:\n");
+        DumpHex(symmKey, 32);
     }
 
     EVP_PKEY* senderPub = NULL;
     if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
         senderPub = EVP_PKEY_new_raw_public_key(NID_X9_62_prime256v1, NULL, aea->profileDependent, 65);
         if (!senderPub) {
+            NEO_AA_LogError("senderPub not specified\n");
             return NULL;
         }
         EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(recPriv, NULL);
@@ -514,15 +627,17 @@ uint8_t *neo_aea_archive_extract_data(
           || (EVP_PKEY_derive_init(ctx) <= 0)
           || (EVP_PKEY_derive_set_peer(ctx, senderPub) <= 0)
           || (EVP_PKEY_derive(ctx, symmKey, &symmKeySize) <= 0)) {
+            NEO_AA_LogError("Cannot derive symmKey\n");
             return NULL;
         }
     }
 
     if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
         if (!password || !passwordSize) {
+            NEO_AA_LogError("Password not specified\n");
             return NULL;
         }
-        uint8_t* extendedSalt = password_key(aea->keyDerivationSalt);
+        uint8_t* extendedSalt = password_key(aea->keyDerivationSalt, keySize);
         memcpy(aea->keyDerivationSalt, &extendedSalt[32], 0x20);
         symmKey = get_password_key(password, passwordSize, extendedSalt, 32, aea->scryptStrength);
     }
@@ -533,10 +648,14 @@ uint8_t *neo_aea_archive_extract_data(
 
     /* Calculate Main Key (AEA_AMK) */
     uint8_t* mainKey = main_key(aea, senderPub, recPriv, signaturePub, symmKey, symmKeySize);
+    printf("mainKey:\n");
+    DumpHex(mainKey, 32);
     if (IS_ENCRYPTED(aea->profileID)) {
-        uint8_t* rootHeaderKey = root_header_key(mainKey);
+        uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
+        printf("rootHeaderKey:\n");
+        DumpHex(rootHeaderKey, 32);
         memcpy(
-            aea->encryptedRootHeader, 
+            &aea->encryptedRootHeader[0], 
             decrypt_AES_256_CTR(rootHeaderKey, aea->encryptedRootHeader, 0x30), 
             0x30
         );
@@ -546,149 +665,39 @@ uint8_t *neo_aea_archive_extract_data(
     struct aea_root_header* rootHeader = &aea->rootHeader;
     char compressionAlgo = rootHeader->compressionAlgorithm;
     if (rootHeader->checksumAlgorithm != 2) {
-        NEO_AA_LogError("non sha256 checksum not yet supported\n");
-        return 0;
+        printf("Root Header:\n");
+        printf("\toriginalFileSize: 0x%llX\n", rootHeader->originalFileSize);
+        printf("\tencryptedFileSize: 0x%llX\n", rootHeader->encryptedFileSize);
+        printf("\tsegmentSize: 0x%X\n", rootHeader->segmentSize);
+        printf("\tsegmentsPerCluster: 0x%X\n", rootHeader->segmentsPerCluster);
+        printf("\tcompressionAlgorithm: 0x%X\n", rootHeader->compressionAlgorithm);
+        printf("\tchecksumAlgorithm: 0x%X\n", rootHeader->checksumAlgorithm);
+        NEO_AA_LogError("Non-SHA256 checksum not yet supported\n");
+        return NULL;
     }
-    size_t outBufferSize = 0;
-    size_t numClusters = 0,
-           clusterIndex = 0,
-           segmentHeaderSize = 8 + checksumSizes[rootHeader->checksumAlgorithm];
 
-    // Cluster Decryption Routine
-    /* 
-        During the execution of this function,
-        There is a possibility to use memory that is ~2x the file size
-        (one copy of the encrypted data, another of the decrypted)
-        Parallelization of decryption is possible given segment sizes
-            are precomputed beforehand.
-    */
-    size_t aeaDataMallocSize = 0;
     if (IS_ENCRYPTED(aea->profileID)) {
-        uint8_t* encryptedClusters = aea->encryptedClusters;
-        size_t off = 0, clusterSize = sizeof(struct aea_cluster_header) * 10;
-        int i = 0;
-        aea->clusters = malloc(clusterSize);
-        if (!aea->clusters) {
-            NEO_AA_ErrorHeapAlloc();
-            return NULL;
-        }
-        // no known number of clusters, so iterate until we reach the end
-        while (off < aea->clusterLen) {
-            uint8_t* clusterKey = cluster_key(mainKey, clusterIndex);
-
-            // decrypt current cluster
-            uint8_t* clusterHeaderKey = cluster_header_key(clusterKey);
-            uint8_t* decryptedCluster = decrypt_AES_256_CTR(
-                clusterHeaderKey, 
-                &encryptedClusters[off], 
-                segmentHeaderSize * rootHeader->segmentsPerCluster
-            );
-
-            // make new cluster struct (data field in segments not filled in)
-            struct aea_cluster_header cluster = new_partial_cluster(
-                decryptedCluster, 
-                rootHeader->segmentsPerCluster, 
-                rootHeader->checksumAlgorithm
-            );
-            off += segmentHeaderSize * rootHeader->segmentsPerCluster  // segment headers
-                +  0x20 * (1 + rootHeader->segmentsPerCluster); // HMACs
-            free(decryptedCluster); // already copied into the cluster struct, no longer required
-            
-            for (size_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
-                struct aea_segment_header *segment = &cluster.segments[i];
-                uint8_t *segmentKey = segment_key(clusterKey, i);
-                // EXPENSIVE -- up to 1 MB copied and decrypted per segment!
-                uint8_t *decryptedSegment = decrypt_AES_256_CTR(
-                    segmentKey, 
-                    &encryptedClusters[off], 
-                    segment->compressedSize
-                );
-                if (!decryptedSegment) {
-                    return NULL;
-                }
-                // direct assignment because the whole decrypted memory belongs to this single segment
-                segment->segmentData = decryptedSegment;
-                // all fields in segment are now fully setup, we can move to next segment
-                off += segment->compressedSize; // segment data
-                aeaDataMallocSize += segment->originalSize;
-            }
-            aea->clusters[i++] = cluster;
-            if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
-                clusterSize *= 2;
-                aea->clusters = realloc(aea->clusters, clusterSize);
-                if (!aea->clusters) {
-                    NEO_AA_ErrorHeapAlloc();
-                    return NULL;
-                }
-            }
-            // off == next cluster header offset
-        }
-        free(encryptedClusters); // free encrypted clusters to not waste any more memory holding it
-        // now we should only be using memory that's the same size as the file size
-    } else {
-        while (1) {
-            /*
-             * TODO:
-             * This code is relying on there being an empty segment
-             * at end of the last cluster, this is bad but idk how else
-             */
-            int numSegments = 0;
-            struct aea_segment_header *segmentHeaders = aea->clusters[clusterIndex].segments;
-            for (uint32_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
-                struct aea_segment_header* curSegmentHeader = &segmentHeaders[i];
-                if (curSegmentHeader->compressedSize == 0) {
-                    /* Empty segment */
-                    break;
-                }
-                size_t aeaDataMallocSizeOld = aeaDataMallocSize;
-                aeaDataMallocSize += curSegmentHeader->originalSize;
-                if (aeaDataMallocSizeOld > aeaDataMallocSize) {
-                    NEO_AA_LogError("aeaDataMallocSize overflow");
-                    return NULL;
-                }
-                numSegments++;
-            }
-            if (numSegments != rootHeader->segmentsPerCluster) {
-                /* there were empty segments, assume last cluster */
-                break;
-            }
-        }
+        // expensive!
+        decrypt_clusters(aea, mainKey, rootHeader, 8 + checksumSizes[rootHeader->checksumAlgorithm]);
     }
-    // use aea->clusters from now on, as they are now decrypted
+    // use aea->clusters, aea->numClusters and aea->innerDataLen from now on, as they are now decrypted and set
 
-    uint8_t *aeaData = malloc(aeaDataMallocSize);
+    uint8_t *aeaData = malloc(aea->innerDataLen);
     if (!aeaData) {
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
-
-    while (1) {
-        int numSegments = 0;
-        struct aea_segment_header *segmentHeaders = aea->clusters[clusterIndex].segments;
-        /* Count number of non-empty segments and calculate aeaDataSize */
-        for (uint32_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
-            struct aea_segment_header* curSegmentHeader = &segmentHeaders[i];
+    size_t dataOffset = 0,
+           outBufferSize = 0;
+    for (int i = 0; i < aea->numClusters; i++) {
+        struct aea_segment_header *segmentHeaders = aea->clusters[i].segments;
+        /* Get data (segment 0 decompressed data + segment 1 decompressed data + etc...) */
+        for (uint32_t j = 0; j < rootHeader->segmentsPerCluster; j++) {
+            struct aea_segment_header* curSegmentHeader = &segmentHeaders[j];
             if (curSegmentHeader->compressedSize == 0) {
-                /* Empty segment */
-                break;
+                // empty segments, no more data to decompress
+                goto end;
             }
-            
-            // https://stackoverflow.com/a/33948556
-            if ((aeaDataSize + curSegmentHeader->originalSize) < aeaDataSize) {
-                NEO_AA_LogError("aeaDataSize overflow\n");
-                return NULL;
-            }
-            aeaDataSize += curSegmentHeader->originalSize;
-            numSegments++;
-        }
-        if (!numSegments) {
-            NEO_AA_LogError("AEA cluster only has empty segments\n");
-            return NULL;
-        }
-        /* Get data (uncompressed segment 0 data append segment 1 data etc...) */
-        int dataOffset = 0;
-        for (uint32_t i = 0; i < numSegments; i++) {
-            struct aea_segment_header* curSegmentHeader = &segmentHeaders[i];
             size_t decompressedBytes = 0;
             /*
              * - = None
@@ -721,25 +730,21 @@ uint8_t *neo_aea_archive_extract_data(
                     0
                 );
                 if (decompressedBytes != curSegmentHeader->originalSize) {
-                    NEO_AA_LogError("failed to decompress LZFSE data\n");
+                    NEO_AA_LogError("Failed to decompress LZFSE data\n");
                     free(aeaData);
                     return NULL;
                 }
             } else {
                 /* Not yet supported */
-                NEO_AA_LogErrorF("compression algorithm %02x not yet supported\n", compressionAlgo);
+                NEO_AA_LogErrorF("Compression algorithm '%c' not yet supported\n", compressionAlgo);
                 free(aeaData);
                 return NULL;
             }
             dataOffset += curSegmentHeader->originalSize;
             outBufferSize += decompressedBytes;
         }
-
-        if (numSegments != rootHeader->segmentsPerCluster) {
-            // there were empty segments, end of cluster
-            break;
-        }
     }   
+end:
     if (size) {
         *size = outBufferSize;
     }
@@ -798,10 +803,10 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
     buf += size;
     memcpy((char *)newaea + 12 + 3 * sizeof(uint8_t *), buf, 0x90);
     buf += 0x90;
-    newaea->clusterLen = aea->encodedDataSize - (buf - aea->encodedData);
+    newaea->clusterDataLen = aea->encodedDataSize - (buf - aea->encodedData);
     // EXPENSIVE: copies all clusters
     if (IS_ENCRYPTED(newaea->profileID)) {
-        if (!alloc_memcpy(&data, buf, newaea->clusterLen)) {
+        if (!alloc_memcpy(&data, buf, newaea->clusterDataLen)) {
             return NULL;
         }
         newaea->encryptedClusters = data;
@@ -816,25 +821,28 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
             NEO_AA_ErrorHeapAlloc();
             return NULL;
         }
+        newaea->innerDataLen = 0;
         // no known number of clusters, so iterate until we reach the end
-        while (off < newaea->clusterLen) {
+        while (off < newaea->clusterDataLen) {
             // make new cluster struct (data field in segments not filled in)
             struct aea_cluster_header cluster = new_partial_cluster(
                 &buf[off], 
+                &buf[off + (segmentHeaderSize * rootHeader->segmentsPerCluster)], 
                 rootHeader->segmentsPerCluster, 
                 rootHeader->checksumAlgorithm
             );
             off += segmentHeaderSize * rootHeader->segmentsPerCluster  // segment headers
                 +  0x20 * (1 + rootHeader->segmentsPerCluster); // HMACs
             
-            for (size_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
-                struct aea_segment_header* segment = &cluster.segments[i];
+            for (size_t j = 0; j < rootHeader->segmentsPerCluster; j++) {
+                struct aea_segment_header* segment = &cluster.segments[j];
                 // EXPENSIVE -- up to 1 MB copied per segment!
                 void* tmp;
                 alloc_memcpy(&tmp, &buf[off], segment->compressedSize);
                 segment->segmentData = tmp;
                 // all fields in segment are now fully setup, we can move to next segment
                 off += segment->compressedSize; // segment data
+                newaea->innerDataLen += segment->originalSize;
             }
             newaea->clusters[i++] = cluster;
             if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
@@ -847,6 +855,7 @@ NewNeoAEAArchive convertFromOld(NeoAEAArchive aea) {
             }
             // off == next cluster header offset
         }
+        newaea->numClusters = i;
     }
     neo_aea_archive_destroy(aea);
     return newaea;

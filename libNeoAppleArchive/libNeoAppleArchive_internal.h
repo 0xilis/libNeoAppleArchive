@@ -20,7 +20,7 @@ uint32_t internal_do_not_call_flip_edian_32(uint32_t num);
 
 #define NEO_AA_NullParamAssert(x) if (!x) {fprintf(stderr,"%s: invalid parameters.\n",__FUNCTION__);exit(1);};
 
-#define NEO_AA_LogError(msg) fprintf(stderr, "%s %s", __FUNCTION__, msg);
+#define NEO_AA_LogError(msg) fprintf(stderr, "%s: %s", __FUNCTION__, msg);
 /* Logs to stderr. printf-like. */
 #define NEO_AA_LogErrorF(fmt, ...) fprintf(stderr, "%s " fmt, __FUNCTION__, __VA_ARGS__);
 

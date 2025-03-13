@@ -1,6 +1,6 @@
 buildDir = build
 CC = clang
-CFLAGS += -fPIC -Os
+CFLAGS += -fPIC -Os -g -fsanitize=address
 
 # Paths for lzfse
 LZFSE_DIR = libNeoAppleArchive/compression/lzfse

@@ -114,12 +114,18 @@ struct __attribute__((packed)) aea_archive {
         uint8_t encryptedRootHeader[0x30];
     };
     uint8_t cluster0HeaderHMAC[0x20];
-    size_t clusterLen; // internal field, not in the file itself
     union {
-        // size: clusterLen
-        uint8_t* encryptedClusters;
+        struct {
+            size_t clusterDataLen; // data length of clusters for encrypted
+            // size: clusterDataLen
+            uint8_t* encryptedClusters;
+        };
         // size: TBD at runtime
-        struct aea_cluster_header* clusters;
+        struct {
+            size_t numClusters, // number of clusters that follow for decrypted
+                   innerDataLen; // length of data that is actually contained in the clusters -> segments
+            struct aea_cluster_header* clusters;
+        };
     };
 };
 
