@@ -17,7 +17,7 @@
 // can't do anything about imported submodules
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
-#include "compression/lzfse/src/lzfse.h"
+#include <lzfse.h>
 #pragma clang diagnostic pop
 #include <libzbitmap.h>
 #include <zlib.h>
