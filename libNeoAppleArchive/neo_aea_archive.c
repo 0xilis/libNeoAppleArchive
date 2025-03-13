@@ -550,11 +550,6 @@ uint8_t *neo_aea_archive_extract_data(
         return 0;
     }
     size_t outBufferSize = 0;
-    uint8_t *aeaData = malloc(aeaDataSize);
-    if (!aeaData) {
-        NEO_AA_ErrorHeapAlloc();
-        return 0;
-    }
     size_t numClusters = 0,
            clusterIndex = 0,
            segmentHeaderSize = 8 + checksumSizes[rootHeader->checksumAlgorithm];
@@ -567,6 +562,7 @@ uint8_t *neo_aea_archive_extract_data(
         Parallelization of decryption is possible given segment sizes
             are precomputed beforehand.
     */
+    size_t aeaDataMallocSize = 0;
     if (IS_ENCRYPTED(aea->profileID)) {
         uint8_t* encryptedClusters = aea->encryptedClusters;
         size_t off = 0, clusterSize = sizeof(struct aea_cluster_header) * 10;
@@ -599,10 +595,10 @@ uint8_t *neo_aea_archive_extract_data(
             free(decryptedCluster); // already copied into the cluster struct, no longer required
             
             for (size_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
-                struct aea_segment_header* segment = &cluster.segments[i];
-                uint8_t* segmentKey = segment_key(clusterKey, i);
+                struct aea_segment_header *segment = &cluster.segments[i];
+                uint8_t *segmentKey = segment_key(clusterKey, i);
                 // EXPENSIVE -- up to 1 MB copied and decrypted per segment!
-                uint8_t* decryptedSegment = decrypt_AES_256_CTR(
+                uint8_t *decryptedSegment = decrypt_AES_256_CTR(
                     segmentKey, 
                     &encryptedClusters[off], 
                     segment->compressedSize
@@ -614,6 +610,7 @@ uint8_t *neo_aea_archive_extract_data(
                 segment->segmentData = decryptedSegment;
                 // all fields in segment are now fully setup, we can move to next segment
                 off += segment->compressedSize; // segment data
+                aeaDataMallocSize += segment->originalSize;
             }
             aea->clusters[i++] = cluster;
             if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
@@ -628,8 +625,42 @@ uint8_t *neo_aea_archive_extract_data(
         }
         free(encryptedClusters); // free encrypted clusters to not waste any more memory holding it
         // now we should only be using memory that's the same size as the file size
+    } else {
+        while (1) {
+            /*
+             * TODO:
+             * This code is relying on there being an empty segment
+             * at end of the last cluster, this is bad but idk how else
+             */
+            int numSegments = 0;
+            struct aea_segment_header *segmentHeaders = aea->clusters[clusterIndex].segments;
+            for (uint32_t i = 0; i < rootHeader->segmentsPerCluster; i++) {
+                struct aea_segment_header* curSegmentHeader = &segmentHeaders[i];
+                if (curSegmentHeader->compressedSize == 0) {
+                    /* Empty segment */
+                    break;
+                }
+                size_t aeaDataMallocSizeOld = aeaDataMallocSize;
+                aeaDataMallocSize += curSegmentHeader->originalSize;
+                if (aeaDataMallocSizeOld > aeaDataMallocSize) {
+                    NEO_AA_LogError("aeaDataMallocSize overflow");
+                    return NULL;
+                }
+                numSegments++;
+            }
+            if (numSegments != rootHeader->segmentsPerCluster) {
+                /* there were empty segments, assume last cluster */
+                break;
+            }
+        }
     }
     // use aea->clusters from now on, as they are now decrypted
+
+    uint8_t *aeaData = malloc(aeaDataMallocSize);
+    if (!aeaData) {
+        NEO_AA_ErrorHeapAlloc();
+        return 0;
+    }
 
     while (1) {
         int numSegments = 0;
