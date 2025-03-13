@@ -12,7 +12,6 @@
 #include <lzfse.h>
 #pragma clang diagnostic pop
 #include <zlib.h>
-#include <fcntl.h>
 
 void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiveSize, const char *outputPath) {
     (void)appleArchive;
@@ -112,19 +111,16 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             mkdir(pathName);
 #else
             mkdir(pathName, accessMode);
-            int fd = open(pathName, O_RDONLY);
-            fstat(fd, &st);
-            if (fd != -1) {
-                uid_t fileUid = st.st_uid;
-                gid_t fileGid = st.st_gid;
-                if (uidIndex != -1) {
-                    fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
-                }
-                if (gidIndex != -1) {
-                    fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
-                }
-                fchown(fd, fileUid, fileGid);
+            stat(pathName, &st);
+            uid_t fileUid = st.st_uid;
+            gid_t fileGid = st.st_gid;
+            if (uidIndex != -1) {
+                fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
             }
+            if (gidIndex != -1) {
+                fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
+            }
+            chown(pathName, fileUid, fileGid);
 #endif
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
@@ -165,21 +161,18 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
 #if defined(_WIN32) || defined(WIN32)
             /* Windows does not implement unix uid_t/gid_t */
 #else
-            int fd = open(pathName, O_RDONLY);
-            fstat(fd, &st);
-            if (fd != -1) {
-                uid_t fileUid = st.st_uid;
-                gid_t fileGid = st.st_gid;
-                if (uidIndex != -1) {
-                    fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
-                }
-                if (gidIndex != -1) {
-                    fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
-                }
-                fchown(fd, fileUid, fileGid);
+            stat(pathName, &st);
+            uid_t fileUid = st.st_uid;
+            gid_t fileGid = st.st_gid;
+            if (uidIndex != -1) {
+                fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
             }
+            if (gidIndex != -1) {
+                fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
+            }
+            chown(pathName, fileUid, fileGid);
             if (modIndex != -1) {
-                fchmod(fd, accessMode);
+                chmod(pathName, accessMode);
             }
 #endif
             size_t xatSize = 0;
@@ -530,34 +523,34 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
-    size_t binary_size = ftell(fp);
+    size_t binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 #if defined(__APPLE__)
     int fd = fp->_file;
 #else
     int fd = fileno(fp);
 #endif
-    if (binary_size > (UINT32_MAX-6) || binary_size < 12) {
+    if (binarySize > (UINT32_MAX-6) || binarySize < 12) {
         fclose(fp);
         NEO_AA_LogError("AEA over 4GB or under 12 bytes\n");
         return NULL;
     }
-    uint8_t *data = malloc(binary_size);
+    uint8_t *data = malloc(binarySize);
     if (!data) {
         fclose(fp);
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    memset(data, 0, binary_size);
-    ssize_t bytesRead = read(fd, data, binary_size);
-    if (bytesRead < binary_size) {
+    memset(data, 0, binarySize);
+    ssize_t bytesRead = read(fd, data, binarySize);
+    if ((size_t)bytesRead < binarySize) {
         fclose(fp);
         free(data);
         NEO_AA_LogError("failed to read entire file\n");
         return NULL;
     }
     fclose(fp);
-    NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(binary_size, data);
+    NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(binarySize, data);
     free(data);
     return plainArchive;
 }
@@ -704,33 +697,33 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
-    size_t binary_size = ftell(fp);
+    size_t binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    if (binary_size < 6) {
+    if (binarySize < 6) {
         /* Compressed or uncompressed, a .aar *cannot* be less than 6 bytes. */
         fclose(fp);
         NEO_AA_LogError("AAR is less than 6 bytes \n");
         return NULL;
     }
     /* malloc our data */
-    uint8_t *data = malloc(binary_size);
+    uint8_t *data = malloc(binarySize);
     if (!data) {
         fclose(fp);
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
     /* 0-fill buffer */
-    memset(data, 0, binary_size);
+    memset(data, 0, binarySize);
     /* copy bytes from file to buffer */
-    ssize_t bytesRead = fread(data, 1, binary_size, fp);
-    if (bytesRead < binary_size) {
+    ssize_t bytesRead = fread(data, 1, binarySize, fp);
+    if ((size_t)bytesRead < binarySize) {
         fclose(fp);
         free(data);
         NEO_AA_LogError("failed to read entire file\n");
         return NULL;
     }
     fclose(fp);
-    NeoAAArchiveGeneric genericArchive = neo_aa_archive_generic_from_encoded_data(binary_size, data);
+    NeoAAArchiveGeneric genericArchive = neo_aa_archive_generic_from_encoded_data(binarySize, data);
     free(data);
     return genericArchive;
 }

@@ -73,7 +73,7 @@ void internal_do_not_call_apply_xattr_blob_to_path(uint8_t *blob, size_t blobSiz
             fprintf(stderr, "libNeoAppleArchive: (%lu) reaches past xatItemSize (%d).\n",(4 + xattrNameLen + 1), xatItemSize);
             return;
         }
-        void *xattrValue = (void *)xattrName + xattrNameLen + 1;
+        void *xattrValue = (void *)(xattrName + xattrNameLen + 1);
         size_t xattrValueLen = xatItemSize - (4 + xattrNameLen + 1);
 #if defined(__linux__)
         if (xattrValueLen) {
@@ -174,8 +174,8 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
         /* Index is 0; this is the first field key */
         return 6;
     }
-    NEO_AA_NullParamAssert((index < fieldCount));
-    int currentPos = 6;
+    NEO_AA_NullParamAssert((index < (int)fieldCount));
+    size_t currentPos = 6;
     for (int i = 0; i < index; i++) {
         if (currentPos >= headerSize) {
             NEO_AA_LogError("reached past encodedData\n");
@@ -197,7 +197,7 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
             return 0;
         }
     }
-    return currentPos;
+    return (uint64_t)currentPos;
 }
 
 size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {

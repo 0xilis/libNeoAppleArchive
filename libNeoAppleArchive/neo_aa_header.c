@@ -58,7 +58,7 @@ void neo_aa_header_destroy(NeoAAHeader header) {
     uint32_t fieldCount = header->fieldCount;
     void **fieldValues = header->fieldValues;
     header->fieldValues = 0;
-    for (int i = 0; i < fieldCount; i++) {
+    for (uint32_t i = 0; i < fieldCount; i++) {
         void *fieldValue = fieldValues[i];
         fieldValues[i] = 0;
         free(fieldValue);
@@ -208,7 +208,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                     free(fieldKeySizes);
                     free(fieldTypes);
                     free(headerData);
-                    for (int i = 0; i < fieldCount - 1; i++) {
+                    for (unsigned int i = 0; i < fieldCount - 1; i++) {
                         free(fieldKeyValues[i]);
                     }
                     free(fieldKeyValues);
@@ -224,7 +224,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 free(fieldKeySizes);
                 free(fieldTypes);
                 free(headerData);
-                for (int i = 0; i < fieldCount - 1; i++) {
+                for (unsigned int i = 0; i < fieldCount - 1; i++) {
                     free(fieldKeyValues[i]);
                 }
                 free(fieldKeyValues);
@@ -240,7 +240,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         /* make value */
         uint8_t *fieldKeyValue = malloc(fieldKeySize);
         /* copy field key to fieldKeyValue */
-        for (int i = 0; i < fieldKeySize; i++) {
+        for (size_t i = 0; i < fieldKeySize; i++) {
             fieldKeyValue[i] = headerData[currentPos + i];
         }
         fieldKeyValues[fieldCount - 1] = fieldKeyValue;
@@ -257,7 +257,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
 
 int neo_aa_header_get_field_key_index(NeoAAHeader header, uint32_t key) {
     uint32_t fieldCount = header->fieldCount;
-    for (int i = 0; i < fieldCount; i++) {
+    for (uint32_t i = 0; i < fieldCount; i++) {
         if (header->fieldKeys[i] == key) {
             return i;
         }
@@ -371,7 +371,7 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
         NEO_AA_LogError("setting field key with different size\n");
         return;
     }
-    if (header->fieldTypes[keyIndex] != fieldType) {
+    if (header->fieldTypes[keyIndex] != (char)fieldType) {
         NEO_AA_LogError("setting field key with different type\n");
         return;
     }
@@ -407,7 +407,7 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
             NEO_AA_LogError("bad fieldSize\n");
             return;
     }
-    void *encodedValuePtr = encodedData + encodedDataPos + 4;
+    void *encodedValuePtr = (uint8_t *)encodedData + encodedDataPos + 4;
     memcpy(encodedValuePtr, &value, fieldSize);
 }
 
@@ -633,7 +633,7 @@ void neo_aa_header_set_field_timespec(NeoAAHeader header, uint32_t key, size_t f
             NEO_AA_LogError("bad fieldSize\n");
             return;
     }
-    void *encodedValuePtr = encodedData + encodedDataPos + 4;
+    void *encodedValuePtr = (uint8_t *)encodedData + encodedDataPos + 4;
     memcpy(encodedValuePtr, &value, fieldSize);
 }
     
@@ -693,7 +693,7 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    for (int i = 0; i < encodedDataSize; i++) {
+    for (size_t i = 0; i < encodedDataSize; i++) {
         copiedEncodedData[i] = encodedData[i];
     }
     for (int i = 0; i < fieldCount; i++) {
