@@ -41,6 +41,16 @@ typedef enum {
     NEO_AEA_COMPRESSION_ZLIB = 'z',
 } NeoAEACompressionTypes;
 
+#define MAIN_KEY_INFO                            "AEA_AMK"
+#define ROOT_HEADER_ENCRYPTED_KEY_INFO           "AEA_RHEK"
+#define CLUSTER_KEY_INFO                         "AEA_CK"
+#define CLUSTER_KEY_MATERIAL_INFO                "AEA_CHEK"
+#define SCRYPT_KEY_INFO                          "AEA_SCRYPT"
+#define SEGMENT_KEY_INFO                         "AEA_SK"
+#define SIGNATURE_ENCRYPTION_DERIVATION_KEY_INFO "AEA_SEK"
+#define SIGNATURE_ENCRYPTION_KEY_INFO            "AEA_SEK2"
+#define PADDING_KEY_INFO                         "AEA_PAK"
+
 static int checksumSizes[3] = {
     0, // None
     8, // Murmur64

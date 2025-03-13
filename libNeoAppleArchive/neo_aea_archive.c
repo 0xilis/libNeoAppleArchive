@@ -396,7 +396,7 @@ void* main_key(
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    strcpy((char *)context, "AEA_AMK");
+    strcpy((char *)context, MAIN_KEY_INFO);
     *(uint32_t *)&context[7] = aea->profileID; // is actually an uint24_t
     context[10] = aea->scryptStrength;
     off += serialize_pubkey(senderPub, &context[off], len - off);
@@ -418,32 +418,32 @@ void* main_key(
 }
 
 void* password_key(uint8_t* mainKey, size_t keySize) {
-    return do_hkdf("AEA_SCRYPT", 10, mainKey, keySize);
+    return do_hkdf(SCRYPT_KEY_INFO, 10, mainKey, keySize);
 }
 
 void* signature_encryption_key(uint8_t* mainKey, size_t keySize) {
-    void* derivationKey = do_hkdf("AEA_SEK", 7, mainKey, 32);
-    return do_hkdf("AEA_SEK2", 8, derivationKey, keySize);
+    void* derivationKey = do_hkdf(SIGNATURE_ENCRYPTION_DERIVATION_KEY_INFO, 7, mainKey, 32);
+    return do_hkdf(SIGNATURE_ENCRYPTION_KEY_INFO, 8, derivationKey, keySize);
 }
 
 void* root_header_key(uint8_t* mainKey, size_t keySize) {
-    return do_hkdf("AEA_RHEK", 8, mainKey, keySize);
+    return do_hkdf(ROOT_HEADER_ENCRYPTED_KEY_INFO, 8, mainKey, keySize);
 }
 
 void* cluster_key(uint8_t* mainKey, int idx) {
     char context[10];
-    strcpy(context, "AEA_CK");
+    strcpy(context, CLUSTER_KEY_INFO);
     *(int *)&context[6] = idx;
     return do_hkdf(context, 10, mainKey, 32);
 }
 
 void* cluster_header_key(uint8_t* clusterKey, size_t keySize) {
-    return do_hkdf("AEA_CHEK", 8, clusterKey, keySize);
+    return do_hkdf(CLUSTER_KEY_MATERIAL_INFO, 8, clusterKey, keySize);
 }
 
 void* segment_key(uint8_t* clusterKey, int idx, size_t keySize) {
     char context[10];
-    strcpy(context, "AEA_SK");
+    strcpy(context, SEGMENT_KEY_INFO);
     *(int *)&context[6] = idx;
     return do_hkdf(context, 10, clusterKey, keySize);
 }
@@ -668,7 +668,7 @@ uint8_t *neo_aea_archive_extract_data(
     if (IS_ENCRYPTED(aea->profileID)) {
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
         printf("rootHeaderKey:\n");
-        DumpHex(rootHeaderKey, 32);
+        DumpHex(rootHeaderKey, keySize);
         memcpy(
             &aea->encryptedRootHeader[0], 
             decrypt_AES_256_CTR(rootHeaderKey, aea->encryptedRootHeader, 0x30), 
@@ -680,13 +680,6 @@ uint8_t *neo_aea_archive_extract_data(
     struct aea_root_header* rootHeader = &aea->rootHeader;
     char compressionAlgo = rootHeader->compressionAlgorithm;
     if (rootHeader->checksumAlgorithm != 2) {
-        printf("Root Header:\n");
-        printf("\toriginalFileSize: 0x%llX\n", rootHeader->originalFileSize);
-        printf("\tencryptedFileSize: 0x%llX\n", rootHeader->encryptedFileSize);
-        printf("\tsegmentSize: 0x%X\n", rootHeader->segmentSize);
-        printf("\tsegmentsPerCluster: 0x%X\n", rootHeader->segmentsPerCluster);
-        printf("\tcompressionAlgorithm: 0x%X\n", rootHeader->compressionAlgorithm);
-        printf("\tchecksumAlgorithm: 0x%X\n", rootHeader->checksumAlgorithm);
         NEO_AA_LogError("Non-SHA256 checksum not yet supported\n");
         return NULL;
     }
