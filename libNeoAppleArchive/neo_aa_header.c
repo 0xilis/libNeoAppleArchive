@@ -208,7 +208,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                     free(fieldKeySizes);
                     free(fieldTypes);
                     free(headerData);
-                    for (uint32_t i = 0; i < fieldCount - 1; i++) {
+                    for (unsigned int i = 0; i < fieldCount - 1; i++) {
                         free(fieldKeyValues[i]);
                     }
                     free(fieldKeyValues);
@@ -224,7 +224,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 free(fieldKeySizes);
                 free(fieldTypes);
                 free(headerData);
-                for (uint32_t i = 0; i < fieldCount - 1; i++) {
+                for (unsigned int i = 0; i < fieldCount - 1; i++) {
                     free(fieldKeyValues[i]);
                 }
                 free(fieldKeyValues);
@@ -371,7 +371,7 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
         NEO_AA_LogError("setting field key with different size\n");
         return;
     }
-    if (header->fieldTypes[keyIndex] != fieldType) {
+    if (header->fieldTypes[keyIndex] != (char)fieldType) {
         NEO_AA_LogError("setting field key with different type\n");
         return;
     }
@@ -407,7 +407,7 @@ void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
             NEO_AA_LogError("bad fieldSize\n");
             return;
     }
-    void *encodedValuePtr = encodedData + encodedDataPos + 4;
+    void *encodedValuePtr = (uint8_t *)encodedData + encodedDataPos + 4;
     memcpy(encodedValuePtr, &value, fieldSize);
 }
 
@@ -633,7 +633,7 @@ void neo_aa_header_set_field_timespec(NeoAAHeader header, uint32_t key, size_t f
             NEO_AA_LogError("bad fieldSize\n");
             return;
     }
-    void *encodedValuePtr = encodedData + encodedDataPos + 4;
+    void *encodedValuePtr = (uint8_t *)encodedData + encodedDataPos + 4;
     memcpy(encodedValuePtr, &value, fieldSize);
 }
     
@@ -693,7 +693,7 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    for (int i = 0; i < encodedDataSize; i++) {
+    for (size_t i = 0; i < encodedDataSize; i++) {
         copiedEncodedData[i] = encodedData[i];
     }
     for (int i = 0; i < fieldCount; i++) {
