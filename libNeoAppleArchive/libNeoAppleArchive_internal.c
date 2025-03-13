@@ -175,7 +175,7 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
         return 6;
     }
     NEO_AA_NullParamAssert((index < fieldCount));
-    int currentPos = 6;
+    size_t currentPos = 6;
     for (int i = 0; i < index; i++) {
         if (currentPos >= headerSize) {
             NEO_AA_LogError("reached past encodedData\n");
@@ -197,7 +197,7 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
             return 0;
         }
     }
-    return currentPos;
+    return (uint64_t)currentPos;
 }
 
 size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
