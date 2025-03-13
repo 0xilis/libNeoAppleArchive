@@ -9,6 +9,7 @@
 #include "libNeoAppleArchive_internal.h"
 #include "../build/lzfse/include/lzfse.h"
 #include <zlib.h>
+#include <fcntl.h>
 
 void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiveSize, const char *outputPath) {
     (void)appleArchive;
@@ -108,16 +109,20 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             mkdir(pathName);
 #else
             mkdir(pathName, accessMode);
-            stat(pathName, &st);
-            uid_t fileUid = st.st_uid;
-            gid_t fileGid = st.st_gid;
-            if (uidIndex != -1) {
-                fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
+            int fd = open(pathName, O_RDONLY);
+            if (fd != -1) {
+                fstat(fd, &st);
+                uid_t fileUid = st.st_uid;
+                gid_t fileGid = st.st_gid;
+                if (uidIndex != -1) {
+                    fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
+                }
+                if (gidIndex != -1) {
+                    fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
+                }
+                fchown(fd, fileUid, fileGid);
+                close(fd);
             }
-            if (gidIndex != -1) {
-                fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
-            }
-            chown(pathName, fileUid, fileGid);
 #endif
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
@@ -158,18 +163,22 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
 #if defined(_WIN32) || defined(WIN32)
             /* Windows does not implement unix uid_t/gid_t */
 #else
-            stat(pathName, &st);
-            uid_t fileUid = st.st_uid;
-            gid_t fileGid = st.st_gid;
-            if (uidIndex != -1) {
-                fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
-            }
-            if (gidIndex != -1) {
-                fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
-            }
-            chown(pathName, fileUid, fileGid);
-            if (modIndex != -1) {
-                chmod(pathName, accessMode);
+            int fd = open(pathName, O_RDONLY);
+            if (fd != -1) {
+                fstat(fd, &st);
+                uid_t fileUid = st.st_uid;
+                gid_t fileGid = st.st_gid;
+                if (uidIndex != -1) {
+                    fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
+                }
+                if (gidIndex != -1) {
+                    fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
+                }
+                fchown(fd, fileUid, fileGid);
+                if (modIndex != -1) {
+                    fchmod(fd, accessMode);
+                }
+                close(fd);
             }
 #endif
             size_t xatSize = 0;
