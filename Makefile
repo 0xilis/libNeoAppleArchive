@@ -1,6 +1,6 @@
 buildDir = build
 CC = clang
-CFLAGS += -fPIC -Os -Wall -pedantic -Wextra
+CFLAGS += -fPIC -Os -Wall -pedantic -Wextra -Ibuild/lzfse/include -Ibuild/libzbitmap/include
 
 # Paths for lzfse
 LZFSE_DIR = libNeoAppleArchive/compression/lzfse
