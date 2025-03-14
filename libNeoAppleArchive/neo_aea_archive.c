@@ -925,7 +925,8 @@ uint8_t *neo_aea_archive_extract_data(
     if (!IS_SIGNED(aea->profileID)) {
         // have to do this to not mess with mainKey
         signaturePub = NULL;
-    } else if (!signaturePub) {
+    } else if (!signaturePub && aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
+        // TODO: explain why exactly profile 0 doesn't need the signaturePub to derive the mainKey
         NEO_AA_LogError("Signing public key not specified\n");
         if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
             free(symmKey);
@@ -994,17 +995,20 @@ uint8_t *neo_aea_archive_extract_data(
             if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
                 free(symmKey);
             }
+            free(mainKey);
             return NULL;
         }
     }
+
+    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+        free(symmKey);
+    }
+    free(mainKey);
     // use aea->clusters, aea->numClusters and aea->innerDataLen from now on, as they are now decrypted and set
 
     uint8_t *aeaData = malloc(aea->innerDataLen); // TODO: MEMORY LEAK
     if (!aeaData) {
         NEO_AA_ErrorHeapAlloc();
-        if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-            free(symmKey);
-        }
         return NULL;
     }
     size_t dataOffset = 0, outBufferSize = 0;
@@ -1054,11 +1058,7 @@ uint8_t *neo_aea_archive_extract_data(
                 );
                 if (decompressedBytes != curSegmentHeader->originalSize) {
                     NEO_AA_LogError("Failed to decompress LZFSE data\n");
-                    free(mainKey);
                     free(aeaData);
-                    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-                        free(symmKey);
-                    }
                     return NULL;
                 }
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZBITMAP) {
@@ -1072,11 +1072,7 @@ uint8_t *neo_aea_archive_extract_data(
                     &unused
                 ) < 0) {
                     NEO_AA_LogError("Failed to decompress LZBITMAP data\n");
-                    free(mainKey);
                     free(aeaData);
-                    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-                        free(symmKey);
-                    }
                     return NULL;
                 }
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_ZLIB) {
@@ -1088,20 +1084,13 @@ uint8_t *neo_aea_archive_extract_data(
                     curSegmentHeader->compressedSize
                 )) {
                     NEO_AA_LogError("Failed to decompress ZLIB data\n");
-                    free(mainKey);
                     free(aeaData);
-                    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-                        free(symmKey);
-                    }
                     return NULL;
                 }
             } else {
                 /* Not yet supported */
                 NEO_AA_LogErrorF("Compression algorithm '%c' not yet supported\n", compressionAlgo);
                 free(aeaData);
-                if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-                    free(symmKey);
-                }
                 return NULL;
             }
             dataOffset += curSegmentHeader->originalSize;
@@ -1112,10 +1101,6 @@ end:
     if (size) {
         *size = outBufferSize;
     }
-    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-        free(symmKey);
-    }
-    free(mainKey);
     return aeaData;
 }
 
