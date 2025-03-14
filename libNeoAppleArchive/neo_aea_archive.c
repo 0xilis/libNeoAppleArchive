@@ -511,7 +511,9 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
             return NULL;
         }
         aea->encryptedClusters = data;
+        aea->isEncrypted = true;
     } else {
+        aea->isEncrypted = false;
         struct aea_root_header* rootHeader = &aea->rootHeader;
         size_t off = 0, 
                clusterSize = sizeof(struct aea_cluster_header) * 10, 
@@ -700,6 +702,7 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
     aea->numClusters = i;
     free(encryptedClusters); // free encrypted clusters to not waste any more memory holding it
     // now we should only be using memory that's the same size as the file size
+    aea->isEncrypted = false;
     return 1;
 }
 
@@ -790,7 +793,7 @@ uint8_t *neo_aea_archive_extract_data(
     DumpHex(mainKey, 32);
 
     /* Calculate Root Header Key (AEA_RHEK) */
-    if (IS_ENCRYPTED(aea->profileID)) {
+    if (aea->isEncrypted) {
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
         if (!rootHeaderKey) {
             return NULL;
@@ -812,7 +815,7 @@ uint8_t *neo_aea_archive_extract_data(
         return NULL;
     }
 
-    if (IS_ENCRYPTED(aea->profileID)) {
+    if (aea->isEncrypted) {
         /* EXPENSIVE:
          * Decrypts every cluster and segment in the file and
          * creates new structs for each of them in order to
@@ -957,14 +960,11 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
             aea->encryptedClusters = NULL;
         }
     } else if (aea->clusters) {
-        for (size_t i = 0; i numClusters; i++) {
+        for (size_t i = 0; i < aea->numClusters; i++) {
             struct aea_cluster_header cluster = aea->clusters[i];
-            for (uint32_t j = 0; j rootHeader.segmentsPerCluster; j++) {
-                struct aea_segment_header *segment = &cluster.segments[j];
-                if (!segment) {
-                    free(cluster.segments);
-                    goto clusters_done;
-                }
+            struct aea_root_header rootHeader = aea->rootHeader;
+            for (uint32_t j = 0; j < rootHeader.segmentsPerCluster; j++) {
+                struct aea_segment_header segment = cluster.segments[j];
                 if (segment.compressedSize == 0) {
                     free(cluster.segments);
                     goto clusters_done;

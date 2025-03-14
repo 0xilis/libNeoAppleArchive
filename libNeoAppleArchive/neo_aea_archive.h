@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
+#include <stdbool.h>
 
 #define OPENSSL_ERR_PRINT() fprintf(stderr, "OpenSSL Error at %s in %s:%d: \n", __func__, __FILE__, __LINE__); ERR_print_errors_fp(stderr)
 
@@ -132,6 +133,7 @@ struct __attribute__((packed)) aea_archive {
         uint8_t encryptedRootHeader[0x30];
     };
     uint8_t cluster0HeaderHMAC[0x20];
+    bool isEncrypted;
     union {
         struct {
             size_t clusterDataLen; // data length of clusters for encrypted
