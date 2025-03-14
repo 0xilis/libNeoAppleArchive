@@ -434,8 +434,10 @@ __attribute__((visibility ("hidden"))) void* main_key(
         }
         off += res;
     }
+#ifdef DEBUG
     printf("mainKey context:\n");
     DumpHex(context, len);
+#endif
     if (!hkdf_extract_and_expand_helper(
             aea->keyDerivationSalt,  0x20, 
             (uint8_t *)symmKey, symmKeySize, 
@@ -726,13 +728,17 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
     while (off < clusterDataLen) {
         uint8_t* clusterKey = cluster_key(mainKey, i);
 
+#ifdef DEBUG
         printf("clusterKey %d:\n", i);
         DumpHex(clusterKey, 32);
+#endif
 
         // decrypt current cluster
         uint8_t* clusterHeaderKey = cluster_header_key(clusterKey, keySize);
+#ifdef DEBUG
         printf("clusterHeaderKey %d:\n", i);
         DumpHex(clusterHeaderKey, keySize);
+#endif
         uint8_t* decryptedCluster = decrypt_AES_256_CTR(
             clusterHeaderKey, 
             &encryptedClusters[off], 
@@ -758,9 +764,10 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
                 break;
             }
             uint8_t *segmentKey = segment_key(clusterKey, j, keySize);
+#ifdef DEBUG
             printf("segmentKey %zu:\n", j);
             DumpHex(segmentKey, keySize);
-
+#endif
             // EXPENSIVE -- up to 1 MB copied and decrypted per segment!
             uint8_t *decryptedSegment = decrypt_AES_256_CTR(
                 segmentKey, 
@@ -906,8 +913,10 @@ uint8_t *neo_aea_archive_extract_data(
             NEO_AA_LogError("Could not get extendedSalt\n");
             return NULL;
         }
+#ifdef DEBUG
         printf("extendedSalt:\n");
         DumpHex(extendedSalt, 0x40);
+#endif
         memcpy(aea->keyDerivationSalt, &extendedSalt[32], 0x20);
         symmKey = get_password_key(password, passwordSize, extendedSalt, 32, (uint64_t)0x4000 << (aea->scryptStrength << 1));
         if (!symmKey) {
@@ -919,8 +928,10 @@ uint8_t *neo_aea_archive_extract_data(
     }
 
     symmKeySize = 0x20;
+#ifdef DEBUG
     printf("symmKey:\n");
     DumpHex(symmKey, symmKeySize);
+#endif
 
     if (!IS_SIGNED(aea->profileID)) {
         // have to do this to not mess with mainKey
@@ -949,9 +960,10 @@ uint8_t *neo_aea_archive_extract_data(
     if (!mainKey) {
         return NULL;
     }
+#ifdef DEBUG
     printf("mainKey:\n");
     DumpHex(mainKey, 32);
-
+#endif
     /* Calculate Root Header Key (AEA_RHEK) */
     if (aea->isEncrypted) {
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
@@ -961,8 +973,10 @@ uint8_t *neo_aea_archive_extract_data(
             }
             return NULL;
         }
+#ifdef DEBUG
         printf("rootHeaderKey:\n");
         DumpHex(rootHeaderKey, keySize);
+#endif
         uint8_t* decrypted = decrypt_AES_256_CTR(rootHeaderKey, aea->encryptedRootHeader, 0x30);
         memcpy(
             &aea->encryptedRootHeader[0], 
