@@ -70,12 +70,18 @@ __attribute__((visibility ("hidden"))) int alloc_memcpy(void** dst, void* src, s
 
 __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len) {
     uint8_t *hmac = malloc(HMacSHA256Size);
+    if (!hmac) {
+        NEO_AA_ErrorHeapAlloc();
+        return NULL;
+    }
+
     OSSL_PARAM params[4];
 
     EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
     if (!mac) {
         NEO_AA_LogError("Failed to fetch EVP MAC\n");
         OPENSSL_ERR_PRINT();
+        free(hmac);
         return NULL;
     }
 
@@ -83,6 +89,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     if (!ctx) {
         NEO_AA_LogError("Failed to create EVP MAC context\n");
         OPENSSL_ERR_PRINT();
+        free(hmac);
         return NULL;
     }
     
@@ -95,6 +102,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
         OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
+        free(hmac);
         return NULL;
     }
 
@@ -105,6 +113,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
             OPENSSL_ERR_PRINT();
             EVP_MAC_CTX_free(ctx);
             EVP_MAC_free(mac);
+            free(hmac);
             return NULL;
         }
     }
@@ -114,6 +123,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
             OPENSSL_ERR_PRINT();
             EVP_MAC_CTX_free(ctx);
             EVP_MAC_free(mac);
+            free(hmac);
             return NULL;
         }
     }
@@ -122,6 +132,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
         OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
+        free(hmac);
         return NULL;
     }
 
@@ -131,6 +142,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
         OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
+        free(hmac);
         return NULL;
     }
     EVP_MAC_CTX_free(ctx);
@@ -146,11 +158,13 @@ __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_
     }
     EVP_KDF* kdf;
     if ((kdf = EVP_KDF_fetch(NULL, "hkdf", NULL)) == NULL) {
+        free(derivedKey);
         return NULL;
     }
     EVP_KDF_CTX* ctx = EVP_KDF_CTX_new(kdf);
     EVP_KDF_free(kdf);
     if (ctx == NULL) {
+        free(derivedKey);
         return NULL;
     }
     OSSL_PARAM params[4] = {
@@ -160,9 +174,13 @@ __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_
         OSSL_PARAM_construct_end()
     };
     if (EVP_KDF_CTX_set_params(ctx, params) <= 0) {
+        free(derivedKey);
+        EVP_KDF_CTX_free(ctx);
         return NULL;
     }
     if (EVP_KDF_derive(ctx, derivedKey, outSize, NULL) <= 0) {
+        free(derivedKey);
+        EVP_KDF_CTX_free(ctx);
         return NULL;
     }
     EVP_KDF_CTX_free(ctx);
@@ -241,13 +259,16 @@ __attribute__((visibility ("hidden"))) int get_encoded_size(EVP_PKEY* pkey) {
     OSSL_PARAM* param = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
     if (!param) {
         OPENSSL_ERR_PRINT();
+        OSSL_PARAM_free(params);
         return 0;
     }
     size_t used;
     if (!OSSL_PARAM_get_octet_string(param, NULL, 0, &used)) {
         OPENSSL_ERR_PRINT();
+        OSSL_PARAM_free(params);
         return 0;
     }
+    OSSL_PARAM_free(params);
     return used;
 }
 
@@ -263,13 +284,16 @@ __attribute__((visibility ("hidden"))) int serialize_pubkey(EVP_PKEY* pkey, uint
     OSSL_PARAM* param = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
     if (!param) {
         OPENSSL_ERR_PRINT();
+        OSSL_PARAM_free(params);
         return 0;
     }
     size_t used;
     if (!OSSL_PARAM_get_octet_string(param, (void **)&buf, len, &used)) {
         OPENSSL_ERR_PRINT();
+        OSSL_PARAM_free(params);
         return 0;
     }
+    OSSL_PARAM_free(params);
     return used;
 }
 
@@ -287,7 +311,9 @@ __attribute__((visibility ("hidden"))) uint8_t* calculate_hmac(
     memcpy(buf, salt, saltSize);
     memcpy(&buf[saltSize], data, dataSize);
     memcpy(&buf[saltSize + dataSize], &saltSize, sizeof(uint64_t));
-    return hmac_derive(key, buf, bufSize, NULL, 0);
+    void* hmac = hmac_derive(key, buf, bufSize, NULL, 0);
+    free(buf);
+    return hmac;
 }
 
 __attribute__((visibility ("hidden"))) uint8_t* decrypt_AES_256_CTR(uint8_t* key, uint8_t* data, size_t dataSize) {
@@ -300,18 +326,25 @@ __attribute__((visibility ("hidden"))) uint8_t* decrypt_AES_256_CTR(uint8_t* key
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
     if (!EVP_DecryptInit_ex(ctx, cipher, NULL, &key[32], &key[64])) {
         OPENSSL_ERR_PRINT();
+        EVP_CIPHER_CTX_free(ctx);
+        free(decrypted);
         return 0;
     }
     int outl = dataSize;
     if (!EVP_DecryptUpdate(ctx, decrypted, &outl, data, dataSize)) {
         OPENSSL_ERR_PRINT();
+        EVP_CIPHER_CTX_free(ctx);
+        free(decrypted);
         return 0;
     }
     outl = dataSize - outl;
     if (!EVP_DecryptFinal(ctx, decrypted, &outl)) {
         OPENSSL_ERR_PRINT();
+        EVP_CIPHER_CTX_free(ctx);
+        free(decrypted);
         return 0;
     }
+    EVP_CIPHER_CTX_free(ctx);
     return decrypted;
 }
 
@@ -321,21 +354,23 @@ __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
     uint64_t hardness
 ) {
     uint8_t* out = malloc(32);
-    EVP_KDF *kdf = EVP_KDF_fetch(NULL, "SCRYPT", NULL);
     if (!out) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
+    EVP_KDF *kdf = EVP_KDF_fetch(NULL, "SCRYPT", NULL);
     if (!kdf) {
         OPENSSL_ERR_PRINT();
+        free(out);
         return NULL;
     }
     EVP_KDF_CTX *ctx = EVP_KDF_CTX_new(kdf);
+    EVP_KDF_free(kdf);
     if (!ctx) {
         OPENSSL_ERR_PRINT();
+        free(out);
         return NULL;
     }
-    EVP_KDF_free(kdf);
     uint32_t r = 8, p = 1;
     uint64_t n = hardness;
     OSSL_PARAM params[6] = {
@@ -348,8 +383,11 @@ __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
     };
     if (EVP_KDF_derive(ctx, out, 32, params) <= 0) {
         OPENSSL_ERR_PRINT();
+        EVP_KDF_CTX_free(ctx);
+        free(out);
         return NULL;
     }
+    EVP_KDF_CTX_free(ctx);
     return out;
 }
 
@@ -404,8 +442,11 @@ __attribute__((visibility ("hidden"))) void* main_key(
             (uint8_t *)context, len, 
             mainKey, 32
         )) {
+        free(context);
+        free(mainKey);
         return NULL;
     }
+    free(context);
     return mainKey;
 }
 
@@ -415,7 +456,9 @@ __attribute__((visibility ("hidden"))) void* password_key(uint8_t* mainKey, size
 
 __attribute__((visibility ("hidden"))) void* signature_encryption_key(uint8_t* mainKey, size_t keySize) {
     void* derivationKey = do_hkdf(SIGNATURE_ENCRYPTION_DERIVATION_KEY_INFO, 7, mainKey, 32);
-    return do_hkdf(SIGNATURE_ENCRYPTION_KEY_INFO, 8, derivationKey, keySize);
+    void* res = do_hkdf(SIGNATURE_ENCRYPTION_KEY_INFO, 8, derivationKey, keySize);
+    free(derivationKey);
+    return res;
 }
 
 __attribute__((visibility ("hidden"))) void* root_header_key(uint8_t* mainKey, size_t keySize) {
@@ -476,6 +519,7 @@ __attribute__((visibility ("hidden"))) struct aea_cluster_header new_partial_clu
     for (int i = 0; i < numSegments; i++) {
         struct aea_segment_header segment = new_partial_segment(decryptedCluster, checksumAlgorithm);
         if (!memcmp(&segment, &emptySegment, sizeof(struct aea_segment_header))) {
+            // TODO: MEMORY LEAK: free segment
             return errorCluster;
         }
         decryptedCluster += segmentHeaderSize;
@@ -503,7 +547,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
     uint8_t *buf = encodedData + 12;
     void *data = NULL;
     if (!alloc_memcpy(&data, buf, aea->authDataSize)) {
-	free(aea);
+	    free(aea);
         return NULL;
     }
     aea->authData = data;
@@ -522,6 +566,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
             break;
     }
     if (!alloc_memcpy(&data, buf, size)) {
+        free(aea);
         return NULL;
     }
     aea->signature = data;
@@ -539,6 +584,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
             break;
     }
     if (!alloc_memcpy(&data, buf, size)) {
+        free(aea);
         return NULL;
     };
     aea->profileDependent = data;
@@ -549,6 +595,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
     // EXPENSIVE: copies all clusters
     if (IS_ENCRYPTED(aea->profileID)) {
         if (!alloc_memcpy(&data, buf, aea->clusterDataLen)) {
+            free(aea);
             return NULL;
         }
         aea->encryptedClusters = data;
@@ -563,6 +610,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
         aea->clusters = malloc(clusterSize);
         if (!aea->clusters) {
             NEO_AA_ErrorHeapAlloc();
+            free(aea);
             return NULL;
         }
         aea->innerDataLen = 0;
@@ -594,6 +642,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
                 aea->clusters = realloc(aea->clusters, clusterSize);
                 if (!aea->clusters) {
                     NEO_AA_ErrorHeapAlloc();
+                    free(aea);
                     return NULL;
                 }
             }
@@ -689,6 +738,7 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
             &encryptedClusters[off], 
             segmentHeaderSize * rootHeader->segmentsPerCluster
         );
+        free(clusterHeaderKey);
 
         // make new cluster struct (data field in segments not filled in)
         struct aea_cluster_header cluster = new_partial_cluster(
@@ -717,7 +767,10 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
                 &encryptedClusters[off], 
                 segment->compressedSize
             );
+            free(segmentKey);
             if (!decryptedSegment) {
+                free(aea->clusters); // TODO: MEMORY LEAK: free all other segments too
+                aea->encryptedClusters = encryptedClusters;
                 return 0;
             }
             // direct assignment because the whole decrypted memory belongs to this single segment
@@ -726,17 +779,21 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
             off += segment->compressedSize; // segment data
             aea->innerDataLen += segment->originalSize;
         }
+        free(clusterKey);
         aea->clusters[i++] = cluster;
         if (isFinal) {
             break;
         }
         if (i == (clusterSize / sizeof(struct aea_cluster_header))) {
             clusterSize *= 2;
-            aea->clusters = realloc(aea->clusters, clusterSize);
-            if (!aea->clusters) {
+            void *tmp = realloc(aea->clusters, clusterSize);
+            if (!tmp) {
                 NEO_AA_ErrorHeapAlloc();
+                free(aea->clusters); // TODO: MEMORY LEAK: free all other segments too
+                aea->encryptedClusters = encryptedClusters;
                 return 0;
             }
+            aea->clusters = tmp;
         }
         // off == next cluster header offset
     }
@@ -808,23 +865,37 @@ uint8_t *neo_aea_archive_extract_data(
             OSSL_PARAM_END
         };
     
-        if (EVP_PKEY_fromdata(ctx, &senderPub, EVP_PKEY_KEYPAIR, params) <= 0) {
+        if (EVP_PKEY_fromdata(ctx, &senderPub, EVP_PKEY_KEYPAIR, params) <= 0) { // TODO: MEMORY LEAK
             NEO_AA_LogError("failed to create EVP_PKEY object\n");
             OPENSSL_ERR_PRINT();
+            EVP_PKEY_CTX_free(ctx);
             return NULL;
         }
 
+        EVP_PKEY_CTX_free(ctx);
         ctx = EVP_PKEY_CTX_new(recPriv, NULL);
-        symmKey = malloc(32);
+        if (!ctx) {
+            OPENSSL_ERR_PRINT();
+            return NULL;
+        }
+        symmKey = malloc(32); // TODO: MEMORY LEAK
         symmKeySize = 0x20;
-        if ((!ctx) || (!symmKey)
-          || (EVP_PKEY_derive_init(ctx) <= 0)
+        if (!symmKey) {
+            NEO_AA_ErrorHeapAlloc();
+            EVP_PKEY_CTX_free(ctx);
+            return NULL;
+        }
+        if ((EVP_PKEY_derive_init(ctx) <= 0)
           || (EVP_PKEY_derive_set_peer(ctx, senderPub) <= 0)
           || (EVP_PKEY_derive(ctx, symmKey, &symmKeySize) <= 0)) {
             NEO_AA_LogError("Cannot derive symmKey\n");
             OPENSSL_ERR_PRINT();
+            free(symmKey);
+            EVP_PKEY_free(senderPub);
+            EVP_PKEY_CTX_free(ctx);
             return NULL;
         }
+        EVP_PKEY_CTX_free(ctx);
     } else if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
         if (!password || !passwordSize) {
             NEO_AA_LogError("Password not specified\n");
@@ -841,8 +912,10 @@ uint8_t *neo_aea_archive_extract_data(
         symmKey = get_password_key(password, passwordSize, extendedSalt, 32, (uint64_t)0x4000 << (aea->scryptStrength << 1));
         if (!symmKey) {
             NEO_AA_LogError("Could not derive symmKey from password\n");
+            free(extendedSalt);
             return NULL;
         }
+        free(extendedSalt);
     }
 
     symmKeySize = 0x20;
@@ -854,6 +927,12 @@ uint8_t *neo_aea_archive_extract_data(
         signaturePub = NULL;
     } else if (!signaturePub) {
         NEO_AA_LogError("Signing public key not specified\n");
+        if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+            free(symmKey);
+        }
+        if (senderPub) {
+            EVP_PKEY_free(senderPub);
+        }
         return NULL;
     }
 
@@ -863,6 +942,9 @@ uint8_t *neo_aea_archive_extract_data(
         senderPub, recPriv, signaturePub, 
         symmKey, symmKeySize
     );
+    if (senderPub) {
+        EVP_PKEY_free(senderPub);
+    }
     if (!mainKey) {
         return NULL;
     }
@@ -873,15 +955,21 @@ uint8_t *neo_aea_archive_extract_data(
     if (aea->isEncrypted) {
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
         if (!rootHeaderKey) {
+            if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+                free(symmKey);
+            }
             return NULL;
         }
         printf("rootHeaderKey:\n");
         DumpHex(rootHeaderKey, keySize);
+        uint8_t* decrypted = decrypt_AES_256_CTR(rootHeaderKey, aea->encryptedRootHeader, 0x30);
         memcpy(
             &aea->encryptedRootHeader[0], 
-            decrypt_AES_256_CTR(rootHeaderKey, aea->encryptedRootHeader, 0x30), 
+            decrypted,
             0x30
         );
+        free(rootHeaderKey);
+        free(decrypted);
     }
 
     /* Check Root Header */
@@ -889,6 +977,9 @@ uint8_t *neo_aea_archive_extract_data(
     char compressionAlgo = rootHeader->compressionAlgorithm;
     if (rootHeader->checksumAlgorithm != 2) {
         NEO_AA_LogError("Non-SHA256 checksum not yet supported\n");
+        if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+            free(symmKey);
+        }
         return NULL;
     }
 
@@ -900,14 +991,20 @@ uint8_t *neo_aea_archive_extract_data(
          */
         if (!decrypt_clusters(aea, mainKey, rootHeader, 8 + checksumSizes[rootHeader->checksumAlgorithm])) {
             NEO_AA_LogError("Failed to decrypt clusters\n");
+            if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+                free(symmKey);
+            }
             return NULL;
         }
     }
     // use aea->clusters, aea->numClusters and aea->innerDataLen from now on, as they are now decrypted and set
 
-    uint8_t *aeaData = malloc(aea->innerDataLen);
+    uint8_t *aeaData = malloc(aea->innerDataLen); // TODO: MEMORY LEAK
     if (!aeaData) {
         NEO_AA_ErrorHeapAlloc();
+        if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+            free(symmKey);
+        }
         return NULL;
     }
     size_t dataOffset = 0, outBufferSize = 0;
@@ -957,7 +1054,11 @@ uint8_t *neo_aea_archive_extract_data(
                 );
                 if (decompressedBytes != curSegmentHeader->originalSize) {
                     NEO_AA_LogError("Failed to decompress LZFSE data\n");
+                    free(mainKey);
                     free(aeaData);
+                    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+                        free(symmKey);
+                    }
                     return NULL;
                 }
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZBITMAP) {
@@ -971,7 +1072,11 @@ uint8_t *neo_aea_archive_extract_data(
                     &unused
                 ) < 0) {
                     NEO_AA_LogError("Failed to decompress LZBITMAP data\n");
+                    free(mainKey);
                     free(aeaData);
+                    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+                        free(symmKey);
+                    }
                     return NULL;
                 }
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_ZLIB) {
@@ -983,13 +1088,20 @@ uint8_t *neo_aea_archive_extract_data(
                     curSegmentHeader->compressedSize
                 )) {
                     NEO_AA_LogError("Failed to decompress ZLIB data\n");
+                    free(mainKey);
                     free(aeaData);
+                    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+                        free(symmKey);
+                    }
                     return NULL;
                 }
             } else {
                 /* Not yet supported */
                 NEO_AA_LogErrorF("Compression algorithm '%c' not yet supported\n", compressionAlgo);
                 free(aeaData);
+                if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+                    free(symmKey);
+                }
                 return NULL;
             }
             dataOffset += curSegmentHeader->originalSize;
@@ -1000,6 +1112,10 @@ end:
     if (size) {
         *size = outBufferSize;
     }
+    if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+        free(symmKey);
+    }
+    free(mainKey);
     return aeaData;
 }
 
@@ -1042,10 +1158,6 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
             struct aea_root_header rootHeader = aea->rootHeader;
             for (uint32_t j = 0; j < rootHeader.segmentsPerCluster; j++) {
                 struct aea_segment_header segment = cluster.segments[j];
-                if (segment.compressedSize == 0) {
-                    free(cluster.segments);
-                    goto clusters_done;
-                }
                 if (segment.hash) {
                     free(segment.hash);
                 }
@@ -1055,7 +1167,6 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
             }
             free(cluster.segments);
         }
-clusters_done:
         free(aea->clusters);
     }
     free(aea);
