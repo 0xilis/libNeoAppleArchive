@@ -230,27 +230,47 @@ __attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper
 }
 
 __attribute__((visibility ("hidden"))) int get_encoded_size(EVP_PKEY* pkey) {
-    size_t tmp;
     if (!pkey) {
         return 0;
     }
-    if (!EVP_PKEY_get_raw_public_key(pkey, NULL, &tmp)) {
+    OSSL_PARAM* params;
+    if (!EVP_PKEY_todata(pkey, EVP_PKEY_PUBLIC_KEY, &params)) {
         OPENSSL_ERR_PRINT();
         return 0;
     }
-    return tmp;
+    OSSL_PARAM* param = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
+    if (!param) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
+    size_t used;
+    if (!OSSL_PARAM_get_octet_string(param, NULL, 0, &used)) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
+    return used;
 }
 
 __attribute__((visibility ("hidden"))) int serialize_pubkey(EVP_PKEY* pkey, uint8_t* buf, size_t len) {
     if (!pkey) {
         return 0;
     }
-    size_t tmp = len;
-    if (!EVP_PKEY_get_raw_public_key(pkey, buf, &tmp)) {
+    OSSL_PARAM* params;
+    if (!EVP_PKEY_todata(pkey, EVP_PKEY_PUBLIC_KEY, &params)) {
         OPENSSL_ERR_PRINT();
         return 0;
     }
-    return 1;
+    OSSL_PARAM* param = OSSL_PARAM_locate(params, OSSL_PKEY_PARAM_PUB_KEY);
+    if (!param) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
+    size_t used;
+    if (!OSSL_PARAM_get_octet_string(param, (void **)&buf, len, &used)) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
+    return used;
 }
 
 __attribute__((visibility ("hidden"))) uint8_t* calculate_hmac(
@@ -335,9 +355,7 @@ __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
 
 __attribute__((visibility ("hidden"))) void* main_key(
     NewNeoAEAArchive aea, 
-    EVP_PKEY* senderPub, 
-    EVP_PKEY* recPriv, 
-    EVP_PKEY* sigPub, 
+    EVP_PKEY* senderPub, EVP_PKEY* recPriv, EVP_PKEY* sigPub, 
     uint8_t* symmKey, size_t symmKeySize
 ) {
     size_t len = 11 
@@ -354,9 +372,32 @@ __attribute__((visibility ("hidden"))) void* main_key(
     strcpy((char *)context, MAIN_KEY_INFO);
     *(uint32_t *)&context[7] = aea->profileID; // is actually an uint24_t
     context[10] = aea->scryptStrength;
-    off += serialize_pubkey(senderPub, &context[off], len - off);
-    off += serialize_pubkey(recPriv, &context[off], len - off);
-    off += serialize_pubkey(sigPub, &context[off], len - off);
+    if (senderPub) {
+        int res = serialize_pubkey(senderPub, &context[off], len - off);
+        if (!res) {
+            printf("serialize_pubkey failed!\n");
+            return NULL;
+        }
+        off += res;
+    }
+    if (recPriv) {
+        int res = serialize_pubkey(recPriv, &context[off], len - off);
+        if (!res) {
+            printf("serialize_pubkey failed!\n");
+            return NULL;
+        }
+        off += res;
+    }
+    if (sigPub) {
+        int res = serialize_pubkey(sigPub, &context[off], len - off);
+        if (!res) {
+            printf("serialize_pubkey failed!\n");
+            return NULL;
+        }
+        off += res;
+    }
+    printf("mainKey context:\n");
+    DumpHex(context, len);
     if (!hkdf_extract_and_expand_helper(
             aea->keyDerivationSalt,  0x20, 
             (uint8_t *)symmKey, symmKeySize, 
@@ -735,22 +776,50 @@ uint8_t *neo_aea_archive_extract_data(
         }
     } else if (HAS_SYMMETRIC_ENCRYPTION(aea->profileID)) {
         if (!symmKey || symmKeySize != 32) {
-            NEO_AA_LogError("symmKey is not correct\n");
+            NEO_AA_LogError("Invalid symmKey specified\n");
             return NULL;
         }
     } else if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-        senderPub = EVP_PKEY_new_raw_public_key(NID_X9_62_prime256v1, NULL, aea->profileDependent, 65);
-        if (!senderPub) {
-            NEO_AA_LogError("senderPub not specified\n");
+        if (!recPriv) {
+            NEO_AA_LogError("Recipient private key not specified\n");
             return NULL;
         }
-        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(recPriv, NULL);
+        /* parse the X9.63 ECDSA-P256 key */
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+	    if (ctx == NULL) {
+	    	NEO_AA_LogError("failed to create EVP_PKEY_CTX object\n");
+            OPENSSL_ERR_PRINT();
+            return NULL;
+	    }
+    
+        if (!EVP_PKEY_fromdata_init(ctx)) {
+            NEO_AA_LogError("failed to initialize context\n");
+            OPENSSL_ERR_PRINT();
+            EVP_PKEY_CTX_free(ctx);
+            return NULL;
+        }
+    
+        OSSL_PARAM params[3] = {
+            OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, SN_X9_62_prime256v1, 0),
+            OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_PUB_KEY, aea->profileDependent, 1 + 64),
+            OSSL_PARAM_END
+        };
+    
+        if (EVP_PKEY_fromdata(ctx, &senderPub, EVP_PKEY_KEYPAIR, params) <= 0) {
+            NEO_AA_LogError("failed to create EVP_PKEY object\n");
+            OPENSSL_ERR_PRINT();
+            return NULL;
+        }
+
+        ctx = EVP_PKEY_CTX_new(recPriv, NULL);
         symmKey = malloc(32);
+        symmKeySize = 0x20;
         if ((!ctx) || (!symmKey)
           || (EVP_PKEY_derive_init(ctx) <= 0)
           || (EVP_PKEY_derive_set_peer(ctx, senderPub) <= 0)
           || (EVP_PKEY_derive(ctx, symmKey, &symmKeySize) <= 0)) {
             NEO_AA_LogError("Cannot derive symmKey\n");
+            OPENSSL_ERR_PRINT();
             return NULL;
         }
     } else if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
@@ -778,11 +847,19 @@ uint8_t *neo_aea_archive_extract_data(
     DumpHex(symmKey, symmKeySize);
 
     if (!IS_SIGNED(aea->profileID)) {
+        // have to do this to not mess with mainKey
         signaturePub = NULL;
+    } else if (!signaturePub) {
+        NEO_AA_LogError("Signing public key not specified\n");
+        return NULL;
     }
 
     /* Calculate Main Key (AEA_AMK) */
-    uint8_t* mainKey = main_key(aea, senderPub, recPriv, signaturePub, symmKey, symmKeySize);
+    uint8_t* mainKey = main_key(
+        aea, 
+        senderPub, recPriv, signaturePub, 
+        symmKey, symmKeySize
+    );
     if (!mainKey) {
         return NULL;
     }
