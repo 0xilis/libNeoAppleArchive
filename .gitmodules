@@ -1,3 +1,6 @@
 [submodule "libNeoAppleArchive/compression/lzfse"]
 	path = libNeoAppleArchive/compression/lzfse
 	url = https://github.com/lzfse/lzfse.git
+[submodule "libNeoAppleArchive/compression/libzbitmap"]
+	path = libNeoAppleArchive/compression/libzbitmap
+	url = https://github.com/eafer/libzbitmap.git

@@ -7,7 +7,10 @@
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
-#include "../build/lzfse/include/lzfse.h"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wstrict-prototypes"
+#include <lzfse.h>
+#pragma clang diagnostic pop
 #include <zlib.h>
 #include <fcntl.h>
 
