@@ -691,6 +691,10 @@ uint8_t *neo_aea_archive_extract_data(
     EVP_PKEY* senderPub = NULL;
     if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
         symmKey = aea->profileDependent;
+        if (!symmKey) {
+            NEO_AA_LogError("No symmKey in AEA file\n");
+            return NULL;
+        }
     } else if (HAS_SYMMETRIC_ENCRYPTION(aea->profileID)) {
         if (!symmKey || symmKeySize != 32) {
             NEO_AA_LogError("symmKey is not correct\n");
@@ -720,8 +724,16 @@ uint8_t *neo_aea_archive_extract_data(
             return NULL;
         }
         uint8_t* extendedSalt = password_key(aea->keyDerivationSalt, keySize);
+        if (!extendedSalt) {
+            NEO_AA_LogError("Could not get extendedSalt\n");
+            return NULL;
+        }
         memcpy(aea->keyDerivationSalt, &extendedSalt[32], 0x20);
         symmKey = get_password_key(password, passwordSize, extendedSalt, 32, aea->scryptStrength);
+        if (!symmKey) {
+            NEO_AA_LogError("Could not derive symmKey from password\n");
+            return NULL;
+        }
     }
 
     if (!IS_SIGNED(aea->profileID)) {
@@ -730,12 +742,18 @@ uint8_t *neo_aea_archive_extract_data(
 
     /* Calculate Main Key (AEA_AMK) */
     uint8_t* mainKey = main_key(aea, senderPub, recPriv, signaturePub, symmKey, symmKeySize);
+    if (!mainKey) {
+        return NULL;
+    }
     printf("mainKey:\n");
     DumpHex(mainKey, 32);
 
     /* Calculate Root Header Key (AEA_RHEK) */
     if (IS_ENCRYPTED(aea->profileID)) {
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
+        if (!rootHeaderKey) {
+            return NULL;
+        }
         printf("rootHeaderKey:\n");
         DumpHex(rootHeaderKey, keySize);
         memcpy(
@@ -759,7 +777,10 @@ uint8_t *neo_aea_archive_extract_data(
          * creates new structs for each of them in order to
          * parse them in the right format
          */
-        decrypt_clusters(aea, mainKey, rootHeader, 8 + checksumSizes[rootHeader->checksumAlgorithm]);
+        if (!decrypt_clusters(aea, mainKey, rootHeader, 8 + checksumSizes[rootHeader->checksumAlgorithm])) {
+            NEO_AA_LogError("Failed to decrypt clusters\n");
+            return NULL;
+        }
     }
     // use aea->clusters, aea->numClusters and aea->innerDataLen from now on, as they are now decrypted and set
 
