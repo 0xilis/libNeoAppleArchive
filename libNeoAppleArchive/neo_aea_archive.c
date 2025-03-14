@@ -74,14 +74,14 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
 
     EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
     if (!mac) {
-        fprintf(stderr, "Failed to fetch EVP MAC\n");
+        NEO_AA_LogError("Failed to fetch EVP MAC\n");
         OPENSSL_ERR_PRINT();
         return NULL;
     }
 
     EVP_MAC_CTX *ctx = EVP_MAC_CTX_new(mac);
     if (!ctx) {
-        fprintf(stderr, "Failed to create EVP MAC context\n");
+        NEO_AA_LogError("Failed to create EVP MAC context\n");
         OPENSSL_ERR_PRINT();
         return NULL;
     }
@@ -91,7 +91,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
 
     /* Initialize HMAC with SHA-256 */
     if (!EVP_MAC_init(ctx, hkdf_key, HMacSHA256Size, params)) {
-        fprintf(stderr, "Failed to initialize EVP MAC\n");
+        NEO_AA_LogError("Failed to initialize EVP MAC\n");
         OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
@@ -101,7 +101,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     /* Update HMAC with data */
     if (data2 && data2Len > 0) {
         if (!EVP_MAC_update(ctx, data2, data2Len)) {
-            fprintf(stderr, "Failed to update HMAC\n");
+            NEO_AA_LogError("Failed to update HMAC\n");
             OPENSSL_ERR_PRINT();
             EVP_MAC_CTX_free(ctx);
             EVP_MAC_free(mac);
@@ -110,7 +110,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     }
     if (data1 && data1Len > 0) {
         if (!EVP_MAC_update(ctx, data1, data1Len)) {
-            fprintf(stderr, "Failed to update HMAC\n");
+            NEO_AA_LogError("Failed to update HMAC\n");
             OPENSSL_ERR_PRINT();
             EVP_MAC_CTX_free(ctx);
             EVP_MAC_free(mac);
@@ -118,7 +118,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
         }
     }
     if (!EVP_MAC_update(ctx, (const uint8_t *)&data2Len, 8)) {
-        fprintf(stderr, "Failed to update HMAC\n");
+        NEO_AA_LogError("Failed to update HMAC\n");
         OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
@@ -127,7 +127,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
 
     /* Finalize HMAC */
     if (!EVP_MAC_final(ctx, hmac, NULL, HMacSHA256Size)) {
-        fprintf(stderr, "Failed to finalize HMAC\n");
+        NEO_AA_LogError("Failed to finalize HMAC\n");
         OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
@@ -178,48 +178,48 @@ __attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper
 ) {
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
     if (!ctx) {
-        fprintf(stderr, "Failed to create HKDF context\n");
+        NEO_AA_LogError("Failed to create HKDF context\n");
         OPENSSL_ERR_PRINT();
         return 0;
     }
 
     if (EVP_PKEY_derive_init(ctx) <= 0) {
-        fprintf(stderr, "Failed to initialize HKDF context\n");
+        NEO_AA_LogError("Failed to initialize HKDF context\n");
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) <= 0) {
-        fprintf(stderr, "Failed to set HKDF hash function\n");
+        NEO_AA_LogError("Failed to set HKDF hash function\n");
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (salt && EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt, salt_len) <= 0) {
-        fprintf(stderr, "Failed to set HKDF salt\n");
+        NEO_AA_LogError("Failed to set HKDF salt\n");
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_CTX_set1_hkdf_key(ctx, key, key_len) <= 0) {
-        fprintf(stderr, "Failed to set HKDF key\n");
+        NEO_AA_LogError("Failed to set HKDF key\n");
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info, info_len) <= 0) {
-        fprintf(stderr, "Failed to set HKDF info\n");
+        NEO_AA_LogError("Failed to set HKDF info\n");
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_derive(ctx, out, &out_len) <= 0) {
-        fprintf(stderr, "Failed to derive HKDF output\n");
+        NEO_AA_LogError("Failed to derive HKDF output\n");
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
