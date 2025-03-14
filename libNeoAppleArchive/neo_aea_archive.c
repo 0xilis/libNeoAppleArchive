@@ -75,12 +75,14 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     EVP_MAC *mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
     if (!mac) {
         fprintf(stderr, "Failed to fetch EVP MAC\n");
+        OPENSSL_ERR_PRINT();
         return NULL;
     }
 
     EVP_MAC_CTX *ctx = EVP_MAC_CTX_new(mac);
     if (!ctx) {
         fprintf(stderr, "Failed to create EVP MAC context\n");
+        OPENSSL_ERR_PRINT();
         return NULL;
     }
     
@@ -90,6 +92,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     /* Initialize HMAC with SHA-256 */
     if (!EVP_MAC_init(ctx, hkdf_key, HMacSHA256Size, params)) {
         fprintf(stderr, "Failed to initialize EVP MAC\n");
+        OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
         return NULL;
@@ -99,6 +102,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     if (data2 && data2Len > 0) {
         if (!EVP_MAC_update(ctx, data2, data2Len)) {
             fprintf(stderr, "Failed to update HMAC\n");
+            OPENSSL_ERR_PRINT();
             EVP_MAC_CTX_free(ctx);
             EVP_MAC_free(mac);
             return NULL;
@@ -107,6 +111,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     if (data1 && data1Len > 0) {
         if (!EVP_MAC_update(ctx, data1, data1Len)) {
             fprintf(stderr, "Failed to update HMAC\n");
+            OPENSSL_ERR_PRINT();
             EVP_MAC_CTX_free(ctx);
             EVP_MAC_free(mac);
             return NULL;
@@ -114,6 +119,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     }
     if (!EVP_MAC_update(ctx, (const uint8_t *)&data2Len, 8)) {
         fprintf(stderr, "Failed to update HMAC\n");
+        OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
         return NULL;
@@ -122,6 +128,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     /* Finalize HMAC */
     if (!EVP_MAC_final(ctx, hmac, NULL, HMacSHA256Size)) {
         fprintf(stderr, "Failed to finalize HMAC\n");
+        OPENSSL_ERR_PRINT();
         EVP_MAC_CTX_free(ctx);
         EVP_MAC_free(mac);
         return NULL;
@@ -172,41 +179,48 @@ __attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
     if (!ctx) {
         fprintf(stderr, "Failed to create HKDF context\n");
+        OPENSSL_ERR_PRINT();
         return 0;
     }
 
     if (EVP_PKEY_derive_init(ctx) <= 0) {
         fprintf(stderr, "Failed to initialize HKDF context\n");
+        OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_CTX_set_hkdf_md(ctx, EVP_sha256()) <= 0) {
         fprintf(stderr, "Failed to set HKDF hash function\n");
+        OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (salt && EVP_PKEY_CTX_set1_hkdf_salt(ctx, salt, salt_len) <= 0) {
         fprintf(stderr, "Failed to set HKDF salt\n");
+        OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_CTX_set1_hkdf_key(ctx, key, key_len) <= 0) {
         fprintf(stderr, "Failed to set HKDF key\n");
+        OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_CTX_add1_hkdf_info(ctx, info, info_len) <= 0) {
         fprintf(stderr, "Failed to set HKDF info\n");
+        OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
 
     if (EVP_PKEY_derive(ctx, out, &out_len) <= 0) {
         fprintf(stderr, "Failed to derive HKDF output\n");
+        OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
         return 0;
     }
@@ -217,7 +231,11 @@ __attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper
 
 __attribute__((visibility ("hidden"))) int get_encoded_size(EVP_PKEY* pkey) {
     size_t tmp;
-    if (!pkey || !EVP_PKEY_get_raw_public_key(pkey, NULL, &tmp)) {
+    if (!pkey) {
+        return 0;
+    }
+    if (!EVP_PKEY_get_raw_public_key(pkey, NULL, &tmp)) {
+        OPENSSL_ERR_PRINT();
         return 0;
     }
     return tmp;
@@ -228,7 +246,8 @@ __attribute__((visibility ("hidden"))) int serialize_pubkey(EVP_PKEY* pkey, uint
         return 0;
     }
     size_t tmp = len;
-    if (!pkey || !EVP_PKEY_get_raw_public_key(pkey, buf, &tmp)) {
+    if (!EVP_PKEY_get_raw_public_key(pkey, buf, &tmp)) {
+        OPENSSL_ERR_PRINT();
         return 0;
     }
     return 1;
@@ -259,37 +278,56 @@ __attribute__((visibility ("hidden"))) uint8_t* decrypt_AES_256_CTR(uint8_t* key
         return NULL;
     }
     EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    EVP_DecryptInit_ex(ctx, cipher, NULL, &key[32], &key[64]);
+    if (!EVP_DecryptInit_ex(ctx, cipher, NULL, &key[32], &key[64])) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
     int outl = dataSize;
-    EVP_DecryptUpdate(ctx, decrypted, &outl, data, dataSize);
+    if (!EVP_DecryptUpdate(ctx, decrypted, &outl, data, dataSize)) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
     outl = dataSize - outl;
-    EVP_DecryptFinal(ctx, decrypted, &outl);
+    if (!EVP_DecryptFinal(ctx, decrypted, &outl)) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
     return decrypted;
 }
 
 __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
     uint8_t* password, size_t passwordLen, 
     uint8_t* salt, size_t saltLen,
-    int hardness
+    uint64_t hardness
 ) {
-    uint8_t* out = malloc(64);
+    uint8_t* out = malloc(32);
     EVP_KDF *kdf = EVP_KDF_fetch(NULL, "SCRYPT", NULL);
-    if (!out || !kdf) {
+    if (!out) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
+    if (!kdf) {
+        OPENSSL_ERR_PRINT();
+        return NULL;
+    }
     EVP_KDF_CTX *ctx = EVP_KDF_CTX_new(kdf);
+    if (!ctx) {
+        OPENSSL_ERR_PRINT();
+        return NULL;
+    }
     EVP_KDF_free(kdf);
     uint32_t r = 8, p = 1;
+    uint64_t n = hardness;
     OSSL_PARAM params[6] = {
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, password, passwordLen),
-        OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salt, saltLen),
-        OSSL_PARAM_construct_uint64(OSSL_KDF_PARAM_SCRYPT_N, (uint64_t *)&hardness),
-        OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_SCRYPT_R, &r),
-        OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_SCRYPT_P, &p),
-        OSSL_PARAM_construct_end()
+        OSSL_PARAM_octet_string(OSSL_KDF_PARAM_PASSWORD, password, passwordLen),
+        OSSL_PARAM_octet_string(OSSL_KDF_PARAM_SALT, salt, saltLen),
+        OSSL_PARAM_uint64(OSSL_KDF_PARAM_SCRYPT_N, &n),
+        OSSL_PARAM_uint32(OSSL_KDF_PARAM_SCRYPT_R, &r),
+        OSSL_PARAM_uint32(OSSL_KDF_PARAM_SCRYPT_P, &p),
+        OSSL_PARAM_END
     };
-    if (EVP_KDF_derive(ctx, out, 64, params) <= 0) {
+    if (EVP_KDF_derive(ctx, out, 32, params) <= 0) {
+        OPENSSL_ERR_PRINT();
         return NULL;
     }
     return out;
@@ -700,8 +738,6 @@ uint8_t *neo_aea_archive_extract_data(
             NEO_AA_LogError("symmKey is not correct\n");
             return NULL;
         }
-        printf("symmKey:\n");
-        DumpHex(symmKey, 32);
     } else if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
         senderPub = EVP_PKEY_new_raw_public_key(NID_X9_62_prime256v1, NULL, aea->profileDependent, 65);
         if (!senderPub) {
@@ -710,7 +746,6 @@ uint8_t *neo_aea_archive_extract_data(
         }
         EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(recPriv, NULL);
         symmKey = malloc(32);
-        symmKeySize = 32;
         if ((!ctx) || (!symmKey)
           || (EVP_PKEY_derive_init(ctx) <= 0)
           || (EVP_PKEY_derive_set_peer(ctx, senderPub) <= 0)
@@ -728,13 +763,19 @@ uint8_t *neo_aea_archive_extract_data(
             NEO_AA_LogError("Could not get extendedSalt\n");
             return NULL;
         }
+        printf("extendedSalt:\n");
+        DumpHex(extendedSalt, 0x40);
         memcpy(aea->keyDerivationSalt, &extendedSalt[32], 0x20);
-        symmKey = get_password_key(password, passwordSize, extendedSalt, 32, aea->scryptStrength);
+        symmKey = get_password_key(password, passwordSize, extendedSalt, 32, (uint64_t)0x4000 << (aea->scryptStrength << 1));
         if (!symmKey) {
             NEO_AA_LogError("Could not derive symmKey from password\n");
             return NULL;
         }
     }
+
+    symmKeySize = 0x20;
+    printf("symmKey:\n");
+    DumpHex(symmKey, symmKeySize);
 
     if (!IS_SIGNED(aea->profileID)) {
         signaturePub = NULL;

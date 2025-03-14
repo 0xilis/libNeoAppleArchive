@@ -21,6 +21,9 @@
 
 #include <stdio.h>
 #include <openssl/evp.h>
+#include <openssl/err.h>
+
+#define OPENSSL_ERR_PRINT() fprintf(stderr, "OpenSSL Error at %s in %s:%d: \n", __func__, __FILE__, __LINE__); ERR_print_errors_fp(stderr)
 
 /* Different types of AEA, should be same as AEAProfiles definition */
 typedef enum {
