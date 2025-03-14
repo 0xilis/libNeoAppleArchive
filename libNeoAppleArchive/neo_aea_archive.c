@@ -30,6 +30,7 @@
 
 #define HMacSHA256Size 32
 
+#ifdef DEBUG
 void DumpHex(const void* data, size_t size) {
 	char ascii[17];
 	size_t i, j;
@@ -58,6 +59,7 @@ void DumpHex(const void* data, size_t size) {
 		}
 	}
 }
+#endif
 
 __attribute__((visibility ("hidden"))) int alloc_memcpy(void** dst, void* src, size_t n) {
     *dst = malloc(n);
@@ -413,7 +415,7 @@ __attribute__((visibility ("hidden"))) void* main_key(
     if (senderPub) {
         int res = serialize_pubkey(senderPub, &context[off], len - off);
         if (!res) {
-            printf("serialize_pubkey failed!\n");
+            NEO_AA_LogError("serialize_pubkey failed!\n");
             return NULL;
         }
         off += res;
@@ -421,7 +423,7 @@ __attribute__((visibility ("hidden"))) void* main_key(
     if (recPriv) {
         int res = serialize_pubkey(recPriv, &context[off], len - off);
         if (!res) {
-            printf("serialize_pubkey failed!\n");
+            NEO_AA_LogError("serialize_pubkey failed!\n");
             return NULL;
         }
         off += res;
@@ -429,15 +431,11 @@ __attribute__((visibility ("hidden"))) void* main_key(
     if (sigPub) {
         int res = serialize_pubkey(sigPub, &context[off], len - off);
         if (!res) {
-            printf("serialize_pubkey failed!\n");
+            NEO_AA_LogError("serialize_pubkey failed!\n");
             return NULL;
         }
         off += res;
     }
-#ifdef DEBUG
-    printf("mainKey context:\n");
-    DumpHex(context, len);
-#endif
     if (!hkdf_extract_and_expand_helper(
             aea->keyDerivationSalt,  0x20, 
             (uint8_t *)symmKey, symmKeySize, 
