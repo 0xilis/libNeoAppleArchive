@@ -101,6 +101,10 @@ struct aea_segment_header {
     uint8_t* segmentData;
 };
 
+
+
+/* Do not manually access items of aea_archive !!! They are subject to change!!! */
+
 struct __attribute__((packed)) aea_archive {
     uint32_t magic;
     uint32_t profileID: 24; // actually an uint24_t
@@ -143,7 +147,7 @@ struct __attribute__((packed)) aea_archive {
     };
 };
 
-typedef struct aea_archive *NewNeoAEAArchive;
+typedef struct aea_archive *NeoAEAArchive;
 
 
 
@@ -151,25 +155,6 @@ typedef struct aea_archive *NewNeoAEAArchive;
 
 
 // ======== starting from here: old struct definitions kept for compatibility reasons ========
-
-/* Do not manually access items of neo_aea_archive_impl !!! They are subject to change!!! */
-struct neo_aea_archive_impl {
-    size_t encodedDataSize;
-    uint8_t *encodedData;
-    /*
-     * In the future for public use,
-     * We should probably implement field keys into
-     * NeoAEAArchive, but for now I'm only
-     * using this for AEAProfile 0 extraction
-     * so I'll only implement the public key
-     * for now...
-     */
-    uint8_t *publicSigningKey; /* buffer containing ECDSA-P256 public signing key */
-    size_t publicSigningKeySize; /* should always be 65 */
-    NeoAEAProfile profile;
-};
-
-typedef struct neo_aea_archive_impl *NeoAEAArchive;
 
 struct aea_old_segment_header {
     uint32_t originalSize;
@@ -226,18 +211,18 @@ struct aea_profile0_post_authData {
     struct aea_preroot_header prerootHeader;
 };
 
-NewNeoAEAArchive neo_aea_archive_with_path(const char *path);
-NewNeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
-NewNeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);
+NeoAEAArchive neo_aea_archive_with_path(const char *path);
+NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
+NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);
 uint8_t *neo_aea_archive_extract_data(
-    NewNeoAEAArchive aea, 
+    NeoAEAArchive aea, 
     size_t *size, 
     EVP_PKEY* recPriv,
     EVP_PKEY* signaturePub,
     uint8_t* symmKey, size_t symmKeySize,
     uint8_t* password, size_t passwordSize
 );
-NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NewNeoAEAArchive aea);
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea);
 NeoAEAProfile neo_aea_archive_profile(NeoAEAArchive aea);
 void neo_aea_archive_destroy(NeoAEAArchive aea);
 

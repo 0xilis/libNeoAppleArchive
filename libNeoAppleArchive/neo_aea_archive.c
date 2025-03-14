@@ -334,7 +334,7 @@ __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
 }
 
 __attribute__((visibility ("hidden"))) void* main_key(
-    NewNeoAEAArchive aea, 
+    NeoAEAArchive aea, 
     EVP_PKEY* senderPub, 
     EVP_PKEY* recPriv, 
     EVP_PKEY* sigPub, 
@@ -451,9 +451,9 @@ __attribute__((visibility ("hidden"))) struct aea_cluster_header new_partial_clu
     return cluster;
 }
 
-NewNeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
+NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
     NEO_AA_NullParamAssert(encodedData);
-    NewNeoAEAArchive aea = calloc(1, sizeof(struct aea_archive));
+    NeoAEAArchive aea = calloc(1, sizeof(struct aea_archive));
     if (!aea) {
         NEO_AA_ErrorHeapAlloc();
         return 0;
@@ -561,7 +561,7 @@ NewNeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, 
     return aea;
 }
 
-NewNeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
+NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
     NEO_AA_NullParamAssert(encodedData);
     uint8_t *encodedDataCopy = malloc(encodedDataSize);
     if (!encodedDataCopy) {
@@ -569,7 +569,7 @@ NewNeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t 
         return 0;
     }
     memcpy(encodedDataCopy, encodedData, encodedDataSize);
-    NewNeoAEAArchive aea = neo_aea_archive_with_encoded_data_nocopy(encodedDataCopy, encodedDataSize);
+    NeoAEAArchive aea = neo_aea_archive_with_encoded_data_nocopy(encodedDataCopy, encodedDataSize);
     if (!aea) {
         free(encodedDataCopy);
         return NULL;
@@ -577,7 +577,7 @@ NewNeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t 
     return aea;
 }
 
-NewNeoAEAArchive neo_aea_archive_with_path(const char *path) {
+NeoAEAArchive neo_aea_archive_with_path(const char *path) {
     NEO_AA_NullParamAssert(path);
     if (strlen(path) > 1024) {
         NEO_AA_LogError("path should not exceed 1024 characters\n");
@@ -601,7 +601,7 @@ NewNeoAEAArchive neo_aea_archive_with_path(const char *path) {
         return 0;
     }
     fclose(fp);
-    NewNeoAEAArchive aea = neo_aea_archive_with_encoded_data_nocopy(encodedData, encodedDataSize);
+    NeoAEAArchive aea = neo_aea_archive_with_encoded_data_nocopy(encodedData, encodedDataSize);
     if (!aea) {
         free(encodedData);
         return NULL;
@@ -617,7 +617,7 @@ NewNeoAEAArchive neo_aea_archive_with_path(const char *path) {
     Parallelization of decryption is possible given segment sizes
         are precomputed beforehand.
 */
-__attribute__((visibility ("hidden"))) int decrypt_clusters(NewNeoAEAArchive aea, uint8_t* mainKey, struct aea_root_header* rootHeader, size_t segmentHeaderSize) {
+__attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, uint8_t* mainKey, struct aea_root_header* rootHeader, size_t segmentHeaderSize) {
     uint8_t* encryptedClusters = aea->encryptedClusters;
     size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
     size_t off = 0, 
@@ -710,7 +710,7 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NewNeoAEAArchive aea
  * This does not validate signing.
  */
 uint8_t *neo_aea_archive_extract_data(
-    NewNeoAEAArchive aea, 
+    NeoAEAArchive aea, 
     size_t *size, 
     EVP_PKEY* recPriv,
     EVP_PKEY* signaturePub,
@@ -718,7 +718,7 @@ uint8_t *neo_aea_archive_extract_data(
     uint8_t* password, size_t passwordSize
 ) {
     /* TODO:
-       * support other compression algorithms (lz4, lzbitmap, lzvn, lzma, zlib)
+       * support other compression algorithms (lz4, lzvn, lzma)
        * unit tests for all of these functions to make sure they work
        * more abstraction to make it easier to understand
        * etc...
@@ -930,7 +930,7 @@ end:
  * This does not validate signing. For this, use
  * neo_aa_archive_plain_with_neo_aea_archive_verify
  */
-NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NewNeoAEAArchive aea) {
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
     size_t aarSize;
     uint8_t *encodedAppleArchive = neo_aea_archive_extract_data(aea, &aarSize, NULL, 0, NULL, 0, NULL, 0);
     if (encodedAppleArchive) {
@@ -942,8 +942,44 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NewNeoAEAArchive aea
 
 void neo_aea_archive_destroy(NeoAEAArchive aea) {
     NEO_AA_NullParamAssert(aea);
-    if (aea->encodedData) {
-        free(aea->encodedData);
+    if (aea->authData) {
+        free(aea->authData);
+    }
+    if (aea->signature) {
+        free(aea->signature);
+    }
+    if (aea->profileDependent) {
+        free(aea->profileDependent);
+    }
+    if (aea->isEncrypted) {
+        if (aea->encryptedClusters) {
+            free(aea->encryptedClusters);
+            aea->encryptedClusters = NULL;
+        }
+    } else if (aea->clusters) {
+        for (size_t i = 0; i numClusters; i++) {
+            struct aea_cluster_header cluster = aea->clusters[i];
+            for (uint32_t j = 0; j rootHeader.segmentsPerCluster; j++) {
+                struct aea_segment_header *segment = &cluster.segments[j];
+                if (!segment) {
+                    free(cluster.segments);
+                    goto clusters_done;
+                }
+                if (segment.compressedSize == 0) {
+                    free(cluster.segments);
+                    goto clusters_done;
+                }
+                if (segment.hash) {
+                    free(segment.hash);
+                }
+                if (segment.segmentData) {
+                    free(segment.segmentData);
+                }
+            }
+            free(cluster.segments);
+        }
+clusters_done:
+        free(aea->clusters);
     }
     free(aea);
 }
