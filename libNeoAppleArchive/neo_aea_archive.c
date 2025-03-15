@@ -1138,8 +1138,11 @@ uint32_t neo_aea_archive_profile(NeoAEAArchive aea) {
     return aea->profileID;
 }
 
-uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea) {
+uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
     NEO_AA_NullParamAssert(aea);
+    if (authDataSize) {
+        *authDataSize = aea->authDataSize;
+    }
     return aea->authData;
 }
 
