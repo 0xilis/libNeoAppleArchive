@@ -1133,6 +1133,14 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
     return neo_aa_archive_plain_create_with_encoded_data(aarSize, encodedAppleArchive);
 }
 
+uint32_t neo_aea_archive_profile(NeoAEAArchive aea) {
+    return aea->profileID;
+}
+
+uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea) {
+    return aea->authData;
+}
+
 void neo_aea_archive_destroy(NeoAEAArchive aea) {
     NEO_AA_NullParamAssert(aea);
     if (aea->authData) {
