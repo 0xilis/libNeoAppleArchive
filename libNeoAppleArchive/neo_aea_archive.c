@@ -1134,10 +1134,12 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
 }
 
 uint32_t neo_aea_archive_profile(NeoAEAArchive aea) {
+    NEO_AA_NullParamAssert(aea);
     return aea->profileID;
 }
 
 uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea) {
+    NEO_AA_NullParamAssert(aea);
     return aea->authData;
 }
 
