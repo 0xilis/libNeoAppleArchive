@@ -8,8 +8,9 @@ LZFSE_DIR = libNeoAppleArchive/compression/lzfse
 BUILD_DIR = ../../../build/lzfse
 # Paths for libzbitmap
 LIBZBITMAP_DIR = libNeoAppleArchive/compression/libzbitmap
+libzbitmapBuildDir = build/libzbitmap/lib/
 
-output: $(buildDir)
+output: $(buildDir) $(libzbitmapBuildDir)
 	@ # Build liblzfse submodule
 	@echo "building liblzfse..."
 	$(MAKE) -C $(LZFSE_DIR) install INSTALL_PREFIX=$(BUILD_DIR)
@@ -26,10 +27,14 @@ output: $(buildDir)
 	@$(CC) -c libNeoAppleArchive/neo_aea_archive.c -o build/obj/neo_aea_archive.o $(CFLAGS)
 	@ar rcs build/usr/lib/libNeoAppleArchive.a build/obj/*.o
 
+$(libzbitmapBuildDir):
+	@echo "Creating libzbitmap Directory"
+	mkdir -p build/libzbitmap/lib/ build/libzbitmap/include/
+
 $(buildDir):
 	@echo "Creating Build Directory"
 	mkdir -p build/usr/lib
-	mkdir build/usr/bin
-	mkdir build/obj
-	mkdir build/lzfse
+	mkdir -p build/usr/bin
+	mkdir -p build/obj
+	mkdir -p build/lzfse
 	mkdir -p build/libzbitmap/lib/ build/libzbitmap/include/
