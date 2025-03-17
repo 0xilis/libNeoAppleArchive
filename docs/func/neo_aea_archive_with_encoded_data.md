@@ -1,4 +1,4 @@
-# neo_aea_archive_with_encoded_data_nocopy
+# neo_aea_archive_with_encoded_data
 Creates an Apple Encrypted Archive from a copy of the encoded data.
 
 ```c

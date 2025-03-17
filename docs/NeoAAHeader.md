@@ -5,10 +5,10 @@ NeoAAHeader is a type that is for representing the header of the Apple Archive. 
 
 | Function      | Notes      |
 | ------------- | ------------- |
-| neo_aa_header_create() | Creates a new, blank NeoAAHeader. |
-| neo_aa_header_destroy() | Frees and 0's out all elements of a NeoAAHeader, as well as frees the NeoAAHeader itself. |
-| neo_aa_header_create_with_encoded_data() | Creates a NeoAAHeader from encoded data (encoded data is how the header is represented in the actual .aar file). |
-| neo_aa_header_get_field_key_index() | Returns the index to the field key in the NeoAAHeader. Getting the PAT field, you would use the first arg be the NeoAAHeader, and second be NEO_AA_FIELD_C("PAT"). |
+| [neo_aa_header_create()](func/neo_aa_header_create.md) | Creates a new, blank NeoAAHeader. |
+| [neo_aa_header_destroy()](func/neo_aa_header_destroy.md) | Frees and 0's out all elements of a NeoAAHeader, as well as frees the NeoAAHeader itself. |
+| [neo_aa_header_create_with_encoded_data()](func/neo_aa_header_create_with_encoded_data.md) | Creates a NeoAAHeader from encoded data (encoded data is how the header is represented in the actual .aar file). |
+| [neo_aa_header_get_field_key_index()](func/neo_aa_header_get_field_key_index.md) | Returns the index to the field key in the NeoAAHeader. Getting the PAT field, you would use the first arg be the NeoAAHeader, and second be NEO_AA_FIELD_C("PAT"). |
 | neo_aa_header_get_field_key_uint() | Returns the uint of the field key at the index in the header. |
 | neo_aa_header_get_field_key_string() | Returns the string of the field key at the index in the header. |
 | neo_aa_header_get_field_size() | Returns the size of the field key at the index in the header. |

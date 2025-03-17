@@ -6,7 +6,7 @@ NeoAEAArchive is a type for representing all types of AEA Archives. It can be us
 
 | Function      | Notes      |
 | ------------- | ------------- |
-| neo_aea_archive_with_path() | Creates a new NeoAEAArchive from the file at path. |
+| [neo_aea_archive_with_path()](func/neo_aea_archive_with_path.md) | Creates a new NeoAEAArchive from the file at path. |
 | [neo_aea_archive_with_encoded_data()](func/neo_aea_archive_with_encoded_data.md) | Copies over the encoded data and calls neo_aea_archive_with_encoded_data_nocopy. |
 | [neo_aea_archive_with_encoded_data_nocopy()](func/neo_aea_archive_with_encoded_data_nocopy.md) | Creates a NeoAEAArchive from encoded data (encoded data is a buffer of the actual .aea file). |
 | [neo_aea_archive_extract_data()](func/neo_aea_archive_extract_data.md) | Extract the NeoAEAArchive data, and decrypts it if it is a AEA using decryption. Does not validate signing info. |
