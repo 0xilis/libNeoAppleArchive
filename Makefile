@@ -25,6 +25,7 @@ output: $(buildDir) $(libzbitmapBuildDir)
 	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive_internal.c -o build/obj/libNeoAppleArchive_internal.o $(CFLAGS)
 	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive.c -o build/obj/libNeoAppleArchive.o $(CFLAGS)
 	@$(CC) -c libNeoAppleArchive/neo_aea_archive.c -o build/obj/neo_aea_archive.o $(CFLAGS)
+	@$(CC) -c libNeoAppleArchive/asn1parse.c -o build/obj/asn1parse.o $(CFLAGS)
 	@ar rcs build/usr/lib/libNeoAppleArchive.a build/obj/*.o
 
 $(libzbitmapBuildDir):

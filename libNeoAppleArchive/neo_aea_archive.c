@@ -27,6 +27,7 @@
 #include <openssl/params.h>
 #include <openssl/param_build.h>
 #include <openssl/core_names.h>
+#include "asn1parse.h"
 
 #define HMacSHA256Size 32
 
@@ -410,7 +411,7 @@ __attribute__((visibility ("hidden"))) void* main_key(
         return NULL;
     }
     strcpy((char *)context, MAIN_KEY_INFO);
-    *(uint32_t *)&context[7] = aea->profileID; // is actually an uint24_t
+    *(uint32_t *)&context[7] = aea->profileID; /* is actually an uint24_t */
     context[10] = aea->scryptStrength;
     if (senderPub) {
         int res = serialize_pubkey(senderPub, &context[off], len - off);
@@ -498,11 +499,11 @@ __attribute__((visibility ("hidden"))) struct aea_segment_header new_partial_seg
     }
     segment.hash = tmpBuf;
 
-    // to be initialized later
+    /* to be initialized later */
     segment.segmentData = NULL;
     bzero(segment.segmentHMAC, 0x20);
 
-    // all fields initialized, return the segment
+    /* all fields initialized, return the segment */
     return segment;
 }
 
@@ -675,7 +676,7 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
         NEO_AA_LogError("path should not exceed 1024 characters\n");
         return 0;
     }
-    FILE *fp = fopen(path, "r");
+    FILE *fp = fopen(path, "rb");
     if (!fp) {
         NEO_AA_LogError("failed to open path\n");
         return 0;
@@ -685,7 +686,7 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
     fseek(fp, 0, SEEK_SET);
     uint8_t *encodedData = malloc(encodedDataSize);
     /* copy bytes to buffer */
-    size_t bytesRead = fread(encodedData, encodedDataSize, 1, fp);
+    size_t bytesRead = fread(encodedData, 1, encodedDataSize, fp);
     if (bytesRead < encodedDataSize) {
         fclose(fp);
         free(encodedData);
@@ -1180,4 +1181,155 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
         free(aea->clusters);
     }
     free(aea);
+}
+
+/*
+ * neo_aea_archive_verify
+ *
+ * Verifies the ECDSA-P256 signature, as well as
+ * HKDF / HMAC verification. If valid, it will
+ * return 0. If not or an error occours, it returns -1.
+ *
+ * TODO: HKDF / HMAC verification not yet done.
+ * TODO: Only supports profile 0.
+ */
+int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
+    NEO_AA_NullParamAssert(aea);
+
+    if (aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
+        NEO_AA_LogError("Verification only supported for profile 0 (ECDSA-P256)\n");
+        return 0;
+    }
+
+    if (aea->authDataSize == 0 || aea->signature == NULL) {
+        NEO_AA_LogError("Invalid authDataSize or signature\n");
+        return 0;
+    }
+
+    /* Verify public key format */
+    if (!publicKey || publicKey[0] != 0x04) {
+        NEO_AA_LogError("Invalid public key format: must be uncompressed X9.63 (65 bytes, starting with 0x04)\n");
+        return 0;
+    }
+
+    /* Create an EVP_PKEY context for the public key */
+    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+    if (!ctx) {
+        OPENSSL_ERR_PRINT();
+        return 0;
+    }
+
+    /* Initialize the context for key creation */
+    if (EVP_PKEY_fromdata_init(ctx) <= 0) {
+        OPENSSL_ERR_PRINT();
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+    }
+
+    /* Build the parameters for the public key */
+    OSSL_PARAM_BLD *param_bld = OSSL_PARAM_BLD_new();
+    if (!param_bld) {
+        OPENSSL_ERR_PRINT();
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+    }
+
+    /* Set the curve name (secp256r1) */
+    if (!OSSL_PARAM_BLD_push_utf8_string(param_bld, OSSL_PKEY_PARAM_GROUP_NAME, SN_X9_62_prime256v1, 0)) {
+        OPENSSL_ERR_PRINT();
+        OSSL_PARAM_BLD_free(param_bld);
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+    }
+
+    /* Set the public key */
+    if (!OSSL_PARAM_BLD_push_octet_string(param_bld, OSSL_PKEY_PARAM_PUB_KEY, publicKey, 65)) {
+        OPENSSL_ERR_PRINT();
+        OSSL_PARAM_BLD_free(param_bld);
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+    }
+
+    /* Convert the parameter builder to parameters */
+    OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(param_bld);
+    if (!params) {
+        OPENSSL_ERR_PRINT();
+        OSSL_PARAM_BLD_free(param_bld);
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+    }
+
+    /* Create the EVP_PKEY object from the parameters */
+    EVP_PKEY *pkey = NULL;
+    if (EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_PUBLIC_KEY, params) <= 0) {
+        OPENSSL_ERR_PRINT();
+        OSSL_PARAM_free(params);
+        OSSL_PARAM_BLD_free(param_bld);
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+    }
+
+    /* Free the parameter builder and parameters */
+    OSSL_PARAM_free(params);
+    OSSL_PARAM_BLD_free(param_bld);
+    EVP_PKEY_CTX_free(ctx);
+
+    /* Create a digest context for verification */
+    EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
+    if (!md_ctx) {
+        OPENSSL_ERR_PRINT();
+        EVP_PKEY_free(pkey);
+        return 0;
+    }
+
+    /* Initialize the digest context for verification */
+    if (EVP_DigestVerifyInit(md_ctx, NULL, EVP_sha256(), NULL, pkey) <= 0) {
+        OPENSSL_ERR_PRINT();
+        EVP_MD_CTX_free(md_ctx);
+        EVP_PKEY_free(pkey);
+        return 0;
+    }
+
+    /* Create prologue copy to check */
+    size_t prologueSize = 0x13c + aea->authDataSize;
+    uint8_t *prologueCopy = malloc(prologueSize);
+    memcpy(prologueCopy, aea, 12);
+    memcpy(prologueCopy + 12, aea->authData, aea->authDataSize);
+    /* Prologue copy should have 0'd out signature */
+    memset(prologueCopy + 12 + aea->authDataSize, 0, 128);
+    memcpy(prologueCopy + 12 + aea->authDataSize + 128, aea->profileDependent, 32);
+    memcpy(prologueCopy + 12 + aea->authDataSize + 128 + 32, (uint8_t *)aea + offsetof(struct aea_archive, keyDerivationSalt), 0x90);
+
+    /* Update the digest context with the prologue data */
+    if (EVP_DigestVerifyUpdate(md_ctx, prologueCopy, prologueSize) <= 0) {
+        OPENSSL_ERR_PRINT();
+        EVP_MD_CTX_free(md_ctx);
+        EVP_PKEY_free(pkey);
+        free(prologueCopy);
+        return 0;
+    }
+
+    /* Parse asn1 signature */
+    int asn1len = ecdsa_p256_signature_asn1_len(aea->signature, 128);
+    if (!asn1len) {
+        NEO_AA_LogError("Failed to parse ASN.1");
+        return 0;
+    }
+
+    /* Finalize the verification */
+    int result = EVP_DigestVerifyFinal(md_ctx, aea->signature, asn1len);
+
+    /* Clean up */
+    EVP_MD_CTX_free(md_ctx);
+    EVP_PKEY_free(pkey);
+    free(prologueCopy);
+
+    if (result == 1) {
+        return 0;
+    } else if (result == 0) {
+        return -1;
+    } else {
+        OPENSSL_ERR_PRINT();
+        return -1;
+    }
 }

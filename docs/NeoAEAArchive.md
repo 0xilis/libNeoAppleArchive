@@ -14,3 +14,4 @@ NeoAEAArchive is a type for representing all types of AEA Archives. It can be us
 | [neo_aea_archive_profile()](func/neo_aea_archive_profile.md) | Get the profile ID of the AEA. |
 | [neo_aea_archive_auth_data()](func/neo_aea_archive_auth_data.md) | Get the auth data of the AEA (may need a call to extract_data first to decrypt it). This returns the raw internal pointer of the struct so it should not be modified. |
 | [neo_aea_archive_destroy()](func/neo_aea_archive_destroy.md) | Destroy / free the NeoAEAArchive and all fields in the object. |
+| neo_aea_archive_verify() | Verify signature of AEA; not done yet, does not verify HKDF/HMac and currently only supported on AEAProfile 0. |

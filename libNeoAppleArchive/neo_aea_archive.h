@@ -228,5 +228,6 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea);
 uint32_t neo_aea_archive_profile(NeoAEAArchive aea);
 uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize);
 void neo_aea_archive_destroy(NeoAEAArchive aea);
+int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey);
 
 #endif /* neo_aea_archive_h */
