@@ -589,7 +589,6 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    memset(data, 0, binarySize);
     ssize_t bytesRead = read(fd, data, binarySize);
     if ((size_t)bytesRead < binarySize) {
         fclose(fp);
@@ -630,16 +629,14 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
         NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
         if (!genericArchive) {
             /* Not enough space to create the generic archive. */
-            neo_aa_archive_plain_destroy(plainArchive);
+            neo_aa_archive_plain_destroy_nozero(plainArchive);
             NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
             return NULL;
         }
-        /* 0-fill struct */
-        memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
         genericArchive->raw = plainArchive;
         genericArchive->compression = NEO_AA_COMPRESSION_NONE;
-        genericArchive->compressedSize = encodedSize;
         genericArchive->uncompressedSize = encodedSize;
+        genericArchive->compressedSize = encodedSize;
         return genericArchive;
     }
     if ((magic & 0x00FFFFFF) == PBZ__MAGIC) {
@@ -656,7 +653,6 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
-            memset(encodedRAWData, 0, uncompressedSize);
             size_t decompressedBytes = lzfse_decode_buffer(encodedRAWData, uncompressedSize, data + 0x1C, compressedSize, 0);
             if (decompressedBytes != uncompressedSize) {
                 free(encodedRAWData);
@@ -672,16 +668,14 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
             if (!genericArchive) {
                 /* Not enough space to create the generic archive. */
-                neo_aa_archive_plain_destroy(plainArchive);
+                neo_aa_archive_plain_destroy_nozero(plainArchive);
                 NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
                 return NULL;
             }
-            /* 0-fill struct */
-            memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
             genericArchive->raw = plainArchive;
             genericArchive->compression = NEO_AA_COMPRESSION_LZFSE;
-            genericArchive->compressedSize = compressedSize;
             genericArchive->uncompressedSize = uncompressedSize;
+            genericArchive->compressedSize = compressedSize;
             return genericArchive;
         } else if (compressionType == 'z') {
             /* type is ZLIB */
@@ -706,16 +700,14 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
             if (!genericArchive) {
                 /* Not enough space to create the generic archive. */
-                neo_aa_archive_plain_destroy(plainArchive);
+                neo_aa_archive_plain_destroy_nozero(plainArchive);
                 NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
                 return NULL;
             }
-            /* 0-fill struct */
-            memset(genericArchive, 0, sizeof(struct neo_aa_archive_generic_impl));
             genericArchive->raw = plainArchive;
             genericArchive->compression = NEO_AA_COMPRESSION_ZLIB;
-            genericArchive->compressedSize = compressedSize;
             genericArchive->uncompressedSize = uncompressedSize;
+            genericArchive->compressedSize = compressedSize;
             return genericArchive;
         } else {
             /* We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry! */
@@ -760,8 +752,6 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    /* 0-fill buffer */
-    memset(data, 0, binarySize);
     /* copy bytes from file to buffer */
     ssize_t bytesRead = fread(data, 1, binarySize, fp);
     if ((size_t)bytesRead < binarySize) {
