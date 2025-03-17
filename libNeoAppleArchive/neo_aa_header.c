@@ -17,14 +17,11 @@ NeoAAHeader neo_aa_header_create(void) {
     memset(header, 0, sizeof(struct neo_aa_header_impl));
     size_t default_header_size = 6;
     char *headerData = malloc(default_header_size + 1);
-    memset(headerData, 0, default_header_size);
     strcpy(headerData, "AA01");
     headerData[4] = 6; /* 6 bytes long on creation */
+    headerData[5] = 0;
     header->encodedData = headerData;
-    header->fieldCount = 0;
     header->headerSize = default_header_size;
-    header->fieldKeys = 0;
-    header->archiveItem = 0;
     return header;
 }
 
@@ -68,6 +65,23 @@ void neo_aa_header_destroy(NeoAAHeader header) {
     free(header);
 }
 
+void neo_aa_header_destroy_nozero(NeoAAHeader header) {
+    if (!header) {
+        return;
+    }
+    free(header->encodedData);
+    free(header->fieldKeySizes);
+    free(header->fieldKeys);
+    free(header->fieldTypes);
+    uint32_t fieldCount = header->fieldCount;
+    void **fieldValues = header->fieldValues;
+    for (uint32_t i = 0; i < fieldCount; i++) {
+        free(fieldValues[i]);
+    }
+    free(fieldValues);
+    free(header);
+}
+
 NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
     uint32_t *dumbHack = *(uint32_t **)&data;
     uint32_t headerMagic = dumbHack[0];
@@ -88,7 +102,6 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         fprintf(stderr,"neo_aa_header_create_with_encoded_data: malloc\n");
         return NULL;
     }
-    memset(header, 0, sizeof(struct neo_aa_header_impl));
     char *headerData = malloc(encodedSize);
     memcpy(headerData, data, encodedSize);
     header->encodedData = headerData;
@@ -249,9 +262,10 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
     }
     header->fieldCount = fieldCount;
     header->fieldKeys = fieldKeys;
+    header->fieldTypes = fieldTypes;
     header->fieldValues = fieldKeyValues;
     header->fieldKeySizes = fieldKeySizes;
-    header->fieldTypes = fieldTypes;
+    header->archiveItem = NULL;
     return header;
 }
 
@@ -652,7 +666,6 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    memset(clonedHeader, 0, sizeof(struct neo_aa_header_impl));
     size_t *copiedFieldKeySizes = malloc(fieldCount * sizeof(size_t));
     if (!copiedFieldKeySizes) {
         free(clonedHeader);
@@ -709,12 +722,13 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         copiedFieldValues[i] = copiedFieldValue;
     }
     clonedHeader->fieldCount = fieldCount;
-    clonedHeader->fieldKeys = copiedFieldKeys;
     clonedHeader->encodedData = copiedEncodedData;
+    clonedHeader->fieldKeys = copiedFieldKeys;
     clonedHeader->fieldTypes = copiedFieldTypes;
-    clonedHeader->fieldKeySizes = copiedFieldKeySizes;
     clonedHeader->fieldValues = copiedFieldValues;
+    clonedHeader->fieldKeySizes = copiedFieldKeySizes;
     clonedHeader->headerSize = encodedDataSize;
+    clonedHeader->archiveItem = NULL;
     return clonedHeader;
 }
 

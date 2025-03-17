@@ -86,10 +86,13 @@ void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t str
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize);
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header);
+NeoAAArchiveItem neo_aa_archive_item_create_with_header_copy(NeoAAHeader header);
 void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t dataSize);
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount);
 void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount);
+void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCount);
 void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive);
+void neo_aa_archive_plain_destroy_nozero(NeoAAArchivePlain plainArchive);
 void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer);
 uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize);
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd);

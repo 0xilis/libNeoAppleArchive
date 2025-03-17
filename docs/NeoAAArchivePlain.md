@@ -2,12 +2,12 @@
 
 NeoAAArchivePlain is a type that is for representing a plain, raw Apple Archive. It holds an item list (array of NeoAAArchiveItem), as well as the item count.
 
-This type is incomplete and has a very high chance of being changed in the future; because of this, do not access the elements of this struct directly in your program that uses libNeoAppleArchive.
-
 | Function      | Notes      |
 | ------------- | ------------- |
-| neo_aa_archive_plain_create_with_items() | Creates a new NeoAAArchivePlain with the item list (array of NeoAAArchiveItem) and item count. |
+| neo_aa_archive_plain_create_with_items() | Creates a new NeoAAArchivePlain with a copy of the item list (array of NeoAAArchiveItem) and item count. |
+| neo_aa_archive_plain_create_with_items_nocopy() | Creates a new NeoAAArchivePlain with the item list (array of NeoAAArchiveItem) and item count. |
 | neo_aa_archive_plain_destroy() | 0's out and neo_aa_archive_item_list_destroy()'s the items, as well as frees the NeoAAArchivePlain itself. |
+| neo_aa_archive_plain_destroy_nozero() | neo_aa_archive_item_list_destroy_nozero()'s the items, as well as frees the NeoAAArchivePlain itself. |
 | neo_aa_archive_plain_outfile_size() | Gets the size of the `.aar` file the NeoAAArchivePlain represents. |
 | neo_aa_archive_plain_get_encoded_data() | Writes the Apple Archive for the NeoAAArchivePlain to a buffer and returns it. |
 | neo_aa_archive_plain_writefd() | Writes the Apple Archive for the NeoAAArchivePlain to an open file descriptor. |

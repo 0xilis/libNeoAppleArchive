@@ -26,14 +26,13 @@ char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
-    size_t binary_size = ftell(fp);
+    size_t binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    lastLoadedBinarySize_internal_do_not_use = binary_size;
-    char *aeaShortcutArchive = malloc(binary_size * sizeof(char));
-    memset(aeaShortcutArchive, 0, binary_size * sizeof(char));
-    size_t bytesRead = fread(aeaShortcutArchive, binary_size, 1, fp);
+    lastLoadedBinarySize_internal_do_not_use = binarySize;
+    char *aeaShortcutArchive = malloc(binarySize);
+    size_t bytesRead = fread(aeaShortcutArchive, binarySize, 1, fp);
     fclose(fp);
-    if (bytesRead < binary_size) {
+    if (bytesRead < binarySize) {
         free(aeaShortcutArchive);
         NEO_AA_LogError("failed to read the entire file.\n");
         return NULL;

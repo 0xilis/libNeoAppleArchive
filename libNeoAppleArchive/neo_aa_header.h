@@ -14,6 +14,7 @@
 
 NeoAAHeader neo_aa_header_create(void);
 void neo_aa_header_destroy(NeoAAHeader header);
+void neo_aa_header_destroy_nozero(NeoAAHeader header);
 NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *data);
 int neo_aa_header_get_field_key_index(NeoAAHeader header, uint32_t key);
 uint64_t neo_aa_header_get_field_key_uint(NeoAAHeader header, int index);

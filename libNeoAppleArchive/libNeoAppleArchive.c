@@ -235,6 +235,11 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     return archiveItem;
 }
 
+NeoAAArchiveItem neo_aa_archive_item_create_with_header_copy(NeoAAHeader header) {
+    NeoAAHeader headerCopy = neo_aa_header_clone_header(header);
+    return neo_aa_archive_item_create_with_header(headerCopy);
+}
+
 void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t dataSize) {
     NEO_AA_NullParamAssert(item);
     NEO_AA_NullParamAssert(data);
@@ -253,7 +258,7 @@ void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t
     item->encodedBlobDataSize = dataSize;
 }
 
-NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount) {
+NeoAAArchivePlain neo_aa_archive_plain_create_with_items_nocopy(NeoAAArchiveItem *items, int itemCount) {
     NEO_AA_NullParamAssert(items);
     NEO_AA_NullParamAssert(itemCount);
     NeoAAArchivePlain plainArchive = malloc(sizeof(struct neo_aa_archive_plain_impl));
@@ -261,8 +266,19 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    memset(plainArchive, 0, sizeof(struct neo_aa_archive_plain_impl));
+    plainArchive->items = items;
+    plainArchive->itemCount = itemCount;
+    return plainArchive;
+}
+
+NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount) {
+    NEO_AA_NullParamAssert(items);
+    NEO_AA_NullParamAssert(itemCount);
     NeoAAArchiveItem *copiedItems = malloc(sizeof(NeoAAArchiveItem) * itemCount);
+    if (!copiedItems) {
+        NEO_AA_ErrorHeapAlloc();
+        return NULL;
+    }
     for (int i = 0; i < itemCount; i++) {
         /* We copy the item list (array of NeoAAArchiveItem) here */
         NeoAAArchiveItem archiveItem = items[i];
@@ -300,9 +316,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         }
         copiedItems[i] = copiedArchiveItem;
     }
-    plainArchive->items = copiedItems;
-    plainArchive->itemCount = itemCount;
-    return plainArchive;
+    return neo_aa_archive_plain_create_with_items_nocopy(copiedItems, itemCount);
 }
 
 void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount) {
@@ -329,6 +343,23 @@ void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive) {
     plainArchive->items = 0;
     neo_aa_archive_item_list_destroy(items, itemCount);
     memset(plainArchive, 0, sizeof(struct neo_aa_archive_plain_impl));
+    free(plainArchive);
+}
+
+void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCount) {
+    NEO_AA_NullParamAssert(items);
+    for (int i = 0; i < itemCount; i++) {
+        NeoAAArchiveItem archiveItem = items[i];
+        neo_aa_header_destroy(archiveItem->header);
+        free(archiveItem->encodedBlobData);
+        free(archiveItem);
+    }
+    free(items);
+}
+
+void neo_aa_archive_plain_destroy_nozero(NeoAAArchivePlain plainArchive) {
+    NEO_AA_NullParamAssert(plainArchive);
+    neo_aa_archive_item_list_destroy(plainArchive->items, plainArchive->itemCount);
     free(plainArchive);
 }
 
