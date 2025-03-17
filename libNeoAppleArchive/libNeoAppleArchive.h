@@ -89,6 +89,7 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header);
 NeoAAArchiveItem neo_aa_archive_item_create_with_header_copy(NeoAAHeader header);
 void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t dataSize);
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount);
+NeoAAArchivePlain neo_aa_archive_plain_create_with_items_nocopy(NeoAAArchiveItem *items, int itemCount);
 void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount);
 void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCount);
 void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive);
