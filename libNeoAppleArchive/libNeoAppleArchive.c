@@ -286,7 +286,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         size_t encodedBlobDataSize = archiveItem->encodedBlobDataSize;
         NeoAAArchiveItem copiedArchiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
         if (!copiedArchiveItem) {
-            free(plainArchive);
+            free(copiedItems);
             NEO_AA_ErrorHeapAlloc();
             return NULL;
         }
@@ -294,7 +294,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         NeoAAHeader copiedHeader = neo_aa_header_clone_header(archiveItem->header);
         if (!copiedHeader) {
             free(copiedArchiveItem);
-            free(plainArchive);
+            free(copiedItems);
             NEO_AA_LogError("cloning header in list failed\n");
             return NULL;
         }
@@ -304,7 +304,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
             char *copiedEncodedBlobData = malloc(encodedBlobDataSize);
             if (!copiedEncodedBlobData) {
                 free(copiedArchiveItem);
-                free(plainArchive);
+                free(copiedItems);
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
