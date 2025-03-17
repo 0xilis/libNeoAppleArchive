@@ -98,6 +98,7 @@ uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd);
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath);
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item);
+void neo_aa_archive_item_destroy_nozero(NeoAAArchiveItem item);
 NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data);
 NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSize, uint8_t *data);
 NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path);

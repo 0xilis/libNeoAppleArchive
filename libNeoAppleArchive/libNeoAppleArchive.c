@@ -491,6 +491,15 @@ void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
     free(item);
 }
 
+void neo_aa_archive_item_destroy_nozero(NeoAAArchiveItem item) {
+    neo_aa_header_destroy_nozero(item->header);
+    char *encodedBlobData = item->encodedBlobData;
+    if (encodedBlobData) {
+        free(encodedBlobData);
+    }
+    free(item);
+}
+
 NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
     /* Get the header size */
     uint32_t *dumbHack = *(uint32_t **)&data;
