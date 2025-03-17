@@ -559,8 +559,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
         position += currentHeaderSize;
         maxSize = encodedSize - position;
     }
-    NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_items(itemList, itemCount);
-    free(itemList);
+    NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_items_nocopy(itemList, itemCount);
     return plainArchive;
 }
 
