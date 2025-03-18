@@ -160,6 +160,14 @@ __attribute__((visibility ("hidden"))) static int hmac_verify(void *hkdf_key, vo
         return -1;
     }
     int isInvalid = memcmp(hmac, hmac2, 32);
+#ifdef DEBUG
+    printf("hmac:\n");
+    DumpHex(hmac, 32);
+#endif
+#ifdef DEBUG
+    printf("hmac2:\n");
+    DumpHex(hmac2, 32);
+#endif
     free(hmac2);
     return isInvalid;
 }
@@ -957,24 +965,27 @@ uint8_t *neo_aea_archive_extract_data(
         return NULL;
     }
 
-    /* Calculate Main Key (AEA_AMK) */
-    uint8_t* mainKey = main_key(
-        aea, 
-        senderPub, recPriv, signaturePub, 
-        symmKey, symmKeySize
-    );
-    if (senderPub) {
-        EVP_PKEY_free(senderPub);
-    }
-    if (!mainKey) {
-        return NULL;
-    }
-#ifdef DEBUG
-    printf("mainKey:\n");
-    DumpHex(mainKey, 32);
-#endif
+    uint8_t *mainKey = NULL;
+
     /* Calculate Root Header Key (AEA_RHEK) */
     if (aea->isEncrypted) {
+        /* Calculate Main Key (AEA_AMK) */
+        mainKey = main_key(
+            aea, 
+            senderPub, recPriv, signaturePub, 
+            symmKey, symmKeySize
+        );
+        if (senderPub) {
+            EVP_PKEY_free(senderPub);
+        }
+        if (!mainKey) {
+            return NULL;
+        }
+#ifdef DEBUG
+        printf("mainKey:\n");
+        DumpHex(mainKey, 32);
+#endif
+
         uint8_t* rootHeaderKey = root_header_key(mainKey, keySize);
         if (!rootHeaderKey) {
             if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
@@ -1021,12 +1032,12 @@ uint8_t *neo_aea_archive_extract_data(
             free(mainKey);
             return NULL;
         }
+        free(mainKey);
     }
 
     if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
         free(symmKey);
     }
-    free(mainKey);
     // use aea->clusters, aea->numClusters and aea->innerDataLen from now on, as they are now decrypted and set
 
     uint8_t *aeaData = malloc(aea->innerDataLen); // TODO: MEMORY LEAK
@@ -1343,143 +1354,32 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         }
     }
 
-    /* Copied from extract_data */
-    EVP_PKEY *recPriv = NULL;
-    EVP_PKEY *signaturePub = NULL;
-    uint8_t *symmKey = NULL;
-    size_t symmKeySize = 0;
-    uint8_t *password = NULL;
-    size_t passwordSize = 0;
-
+    /* TODO: This code sucks ass. */
     size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
-    EVP_PKEY *senderPub = NULL;
+
+    /* Prepare HKDF context */
+    const uint8_t *salt = (uint8_t *)aea + offsetof(struct aea_archive, keyDerivationSalt);
+    const uint8_t *keyDerivationKey = aea->profileDependent; /* 32-byte key, 65 on profile 3/4 */
+    size_t keyDerivationKeySize;
     if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
-        symmKey = aea->profileDependent;
-        if (!symmKey) {
-            NEO_AA_LogError("No symmKey in AEA file\n");
-            return -1;
-        }
-    } else if (HAS_SYMMETRIC_ENCRYPTION(aea->profileID)) {
-        if (!symmKey || symmKeySize != 32) {
-            NEO_AA_LogError("Invalid symmKey specified\n");
-            return -1;
-        }
-    } else if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-        if (!recPriv) {
-            NEO_AA_LogError("Recipient private key not specified\n");
-            return -1;
-        }
-        /* parse the X9.63 ECDSA-P256 key */
-        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
-	    if (ctx == NULL) {
-	    	NEO_AA_LogError("failed to create EVP_PKEY_CTX object\n");
-            OPENSSL_ERR_PRINT();
-            return -1;
-	    }
-    
-        if (!EVP_PKEY_fromdata_init(ctx)) {
-            NEO_AA_LogError("failed to initialize context\n");
-            OPENSSL_ERR_PRINT();
-            EVP_PKEY_CTX_free(ctx);
-            return -1;
-        }
-    
-        OSSL_PARAM params[3] = {
-            OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, SN_X9_62_prime256v1, 0),
-            OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_PUB_KEY, aea->profileDependent, 1 + 64),
-            OSSL_PARAM_END
-        };
-    
-        if (EVP_PKEY_fromdata(ctx, &senderPub, EVP_PKEY_KEYPAIR, params) <= 0) { // TODO: MEMORY LEAK
-            NEO_AA_LogError("failed to create EVP_PKEY object\n");
-            OPENSSL_ERR_PRINT();
-            EVP_PKEY_CTX_free(ctx);
-            return -1;
-        }
-
-        EVP_PKEY_CTX_free(ctx);
-        ctx = EVP_PKEY_CTX_new(recPriv, NULL);
-        if (!ctx) {
-            OPENSSL_ERR_PRINT();
-            return -1;
-        }
-        symmKey = malloc(32); // TODO: MEMORY LEAK
-        symmKeySize = 0x20;
-        if (!symmKey) {
-            NEO_AA_ErrorHeapAlloc();
-            EVP_PKEY_CTX_free(ctx);
-            return -1;
-        }
-        if ((EVP_PKEY_derive_init(ctx) <= 0)
-          || (EVP_PKEY_derive_set_peer(ctx, senderPub) <= 0)
-          || (EVP_PKEY_derive(ctx, symmKey, &symmKeySize) <= 0)) {
-            NEO_AA_LogError("Cannot derive symmKey\n");
-            OPENSSL_ERR_PRINT();
-            free(symmKey);
-            EVP_PKEY_free(senderPub);
-            EVP_PKEY_CTX_free(ctx);
-            return -1;
-        }
-        EVP_PKEY_CTX_free(ctx);
-    } else if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
-        if (!password || !passwordSize) {
-            NEO_AA_LogError("Password not specified\n");
-            return -1;
-        }
-        uint8_t* extendedSalt = password_key(aea->keyDerivationSalt, keySize);
-        if (!extendedSalt) {
-            NEO_AA_LogError("Could not get extendedSalt\n");
-            return -1;
-        }
-#ifdef DEBUG
-        printf("extendedSalt:\n");
-        DumpHex(extendedSalt, 0x40);
-#endif
-        memcpy(aea->keyDerivationSalt, &extendedSalt[32], 0x20);
-        symmKey = get_password_key(password, passwordSize, extendedSalt, 32, (uint64_t)0x4000 << (aea->scryptStrength << 1));
-        if (!symmKey) {
-            NEO_AA_LogError("Could not derive symmKey from password\n");
-            free(extendedSalt);
-            return -1;
-        }
-        free(extendedSalt);
+        keyDerivationKeySize = 32;
+    } else if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_AESCTR_HMAC_ECDHE_P256_NONE) {
+        keyDerivationKeySize = 65;
+    } else if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_AESCTR_HMAC_ECDHE_P256_ECDSA_P256) {
+        keyDerivationKeySize = 65;
+    } else {
+        keyDerivationKeySize = 0;
     }
+    uint8_t context[0x4c] = {0};
+    memcpy(context, "AEA_AMK", 7);
+    memcpy(context + 11, publicKey, 0x41); 
 
-    symmKeySize = 0x20;
-#ifdef DEBUG
-    printf("symmKey:\n");
-    DumpHex(symmKey, symmKeySize);
-#endif
-
-    if (!IS_SIGNED(aea->profileID)) {
-        // have to do this to not mess with mainKey
-        signaturePub = NULL;
-    } else if (!signaturePub && aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
-        // TODO: explain why exactly profile 0 doesn't need the signaturePub to derive the mainKey
-        NEO_AA_LogError("Signing public key not specified\n");
-        if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
-            free(symmKey);
-        }
-        if (senderPub) {
-            EVP_PKEY_free(senderPub);
-        }
+    /* Derive key using OpenSSL HKDF */
+    uint8_t mainKey[32];
+    if (!hkdf_extract_and_expand_helper(salt, 32, keyDerivationKey, keyDerivationKeySize, context, sizeof(context), mainKey, 32)) {
+        fprintf(stderr, "HKDF derivation failed\n");
         return -1;
     }
-
-    /* Calculate Main Key (AEA_AMK) */
-    uint8_t* mainKey = main_key(
-        aea, 
-        0, 0, 0, 
-        0, 0
-    );
-    if (!mainKey) {
-        NEO_AA_LogError("Failed to derive AEA_AMK\n");
-        return -1;
-    }
-#ifdef DEBUG
-    printf("mainKey:\n");
-    DumpHex(mainKey, 32);
-#endif
 
     void *aea_rhek_ctx[8];
     memcpy(aea_rhek_ctx, "AEA_RHEK", 8);
@@ -1492,6 +1392,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     uint8_t *chekPlusAuthData = malloc(authDataSize + 32);
     memcpy(chekPlusAuthData, (uint8_t *)aea + offsetof(struct aea_archive, cluster0HeaderHMAC), 32);
     memcpy(chekPlusAuthData + 32, aea->authData, authDataSize);
+
     if (hmac_verify(rhekKey, (uint8_t *)aea + offsetof(struct aea_archive, rootHeader), 0x30, chekPlusAuthData, authDataSize + 32, (uint8_t *)aea + offsetof(struct aea_archive, rootHeaderHMAC))) {
         free(rhekKey);
         free(chekPlusAuthData);
