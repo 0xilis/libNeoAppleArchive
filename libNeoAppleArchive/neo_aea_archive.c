@@ -154,6 +154,16 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     return hmac;
 }
 
+__attribute__((visibility ("hidden"))) static int hmac_verify(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len, uint8_t *hmac) {
+    void *hmac2 = hmac_derive(hkdf_key, data1, data1Len, data2, data2Len);
+    if (!hmac) {
+        return -1;
+    }
+    int isInvalid = memcmp(hmac, hmac2, 32);
+    free(hmac2);
+    return isInvalid;
+}
+
 __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_t contextLen, void *key, size_t outSize) {
     void *derivedKey = malloc(outSize);
     if (!derivedKey) {
@@ -1324,12 +1334,195 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     EVP_PKEY_free(pkey);
     free(prologueCopy);
 
-    if (result == 1) {
-        return 0;
-    } else if (result == 0) {
-        return -1;
-    } else {
-        OPENSSL_ERR_PRINT();
+    if (result != 1) {
+        if (result == 0) {
+            return -1;
+        } else {
+            OPENSSL_ERR_PRINT();
+            return -1;
+        }
+    }
+
+    /* Copied from extract_data */
+    EVP_PKEY *recPriv = NULL;
+    EVP_PKEY *signaturePub = NULL;
+    uint8_t *symmKey = NULL;
+    size_t symmKeySize = 0;
+    uint8_t *password = NULL;
+    size_t passwordSize = 0;
+
+    size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
+    EVP_PKEY *senderPub = NULL;
+    if (aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
+        symmKey = aea->profileDependent;
+        if (!symmKey) {
+            NEO_AA_LogError("No symmKey in AEA file\n");
+            return -1;
+        }
+    } else if (HAS_SYMMETRIC_ENCRYPTION(aea->profileID)) {
+        if (!symmKey || symmKeySize != 32) {
+            NEO_AA_LogError("Invalid symmKey specified\n");
+            return -1;
+        }
+    } else if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+        if (!recPriv) {
+            NEO_AA_LogError("Recipient private key not specified\n");
+            return -1;
+        }
+        /* parse the X9.63 ECDSA-P256 key */
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+	    if (ctx == NULL) {
+	    	NEO_AA_LogError("failed to create EVP_PKEY_CTX object\n");
+            OPENSSL_ERR_PRINT();
+            return -1;
+	    }
+    
+        if (!EVP_PKEY_fromdata_init(ctx)) {
+            NEO_AA_LogError("failed to initialize context\n");
+            OPENSSL_ERR_PRINT();
+            EVP_PKEY_CTX_free(ctx);
+            return -1;
+        }
+    
+        OSSL_PARAM params[3] = {
+            OSSL_PARAM_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, SN_X9_62_prime256v1, 0),
+            OSSL_PARAM_octet_string(OSSL_PKEY_PARAM_PUB_KEY, aea->profileDependent, 1 + 64),
+            OSSL_PARAM_END
+        };
+    
+        if (EVP_PKEY_fromdata(ctx, &senderPub, EVP_PKEY_KEYPAIR, params) <= 0) { // TODO: MEMORY LEAK
+            NEO_AA_LogError("failed to create EVP_PKEY object\n");
+            OPENSSL_ERR_PRINT();
+            EVP_PKEY_CTX_free(ctx);
+            return -1;
+        }
+
+        EVP_PKEY_CTX_free(ctx);
+        ctx = EVP_PKEY_CTX_new(recPriv, NULL);
+        if (!ctx) {
+            OPENSSL_ERR_PRINT();
+            return -1;
+        }
+        symmKey = malloc(32); // TODO: MEMORY LEAK
+        symmKeySize = 0x20;
+        if (!symmKey) {
+            NEO_AA_ErrorHeapAlloc();
+            EVP_PKEY_CTX_free(ctx);
+            return -1;
+        }
+        if ((EVP_PKEY_derive_init(ctx) <= 0)
+          || (EVP_PKEY_derive_set_peer(ctx, senderPub) <= 0)
+          || (EVP_PKEY_derive(ctx, symmKey, &symmKeySize) <= 0)) {
+            NEO_AA_LogError("Cannot derive symmKey\n");
+            OPENSSL_ERR_PRINT();
+            free(symmKey);
+            EVP_PKEY_free(senderPub);
+            EVP_PKEY_CTX_free(ctx);
+            return -1;
+        }
+        EVP_PKEY_CTX_free(ctx);
+    } else if (HAS_PASSWORD_ENCRYPTION(aea->profileID)) {
+        if (!password || !passwordSize) {
+            NEO_AA_LogError("Password not specified\n");
+            return -1;
+        }
+        uint8_t* extendedSalt = password_key(aea->keyDerivationSalt, keySize);
+        if (!extendedSalt) {
+            NEO_AA_LogError("Could not get extendedSalt\n");
+            return -1;
+        }
+#ifdef DEBUG
+        printf("extendedSalt:\n");
+        DumpHex(extendedSalt, 0x40);
+#endif
+        memcpy(aea->keyDerivationSalt, &extendedSalt[32], 0x20);
+        symmKey = get_password_key(password, passwordSize, extendedSalt, 32, (uint64_t)0x4000 << (aea->scryptStrength << 1));
+        if (!symmKey) {
+            NEO_AA_LogError("Could not derive symmKey from password\n");
+            free(extendedSalt);
+            return -1;
+        }
+        free(extendedSalt);
+    }
+
+    symmKeySize = 0x20;
+#ifdef DEBUG
+    printf("symmKey:\n");
+    DumpHex(symmKey, symmKeySize);
+#endif
+
+    if (!IS_SIGNED(aea->profileID)) {
+        // have to do this to not mess with mainKey
+        signaturePub = NULL;
+    } else if (!signaturePub && aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
+        // TODO: explain why exactly profile 0 doesn't need the signaturePub to derive the mainKey
+        NEO_AA_LogError("Signing public key not specified\n");
+        if (HAS_ASYMMETRIC_ENCRYPTION(aea->profileID)) {
+            free(symmKey);
+        }
+        if (senderPub) {
+            EVP_PKEY_free(senderPub);
+        }
         return -1;
     }
+
+    /* Calculate Main Key (AEA_AMK) */
+    uint8_t* mainKey = main_key(
+        aea, 
+        0, 0, 0, 
+        0, 0
+    );
+    if (!mainKey) {
+        NEO_AA_LogError("Failed to derive AEA_AMK\n");
+        return -1;
+    }
+#ifdef DEBUG
+    printf("mainKey:\n");
+    DumpHex(mainKey, 32);
+#endif
+
+    void *aea_rhek_ctx[8];
+    memcpy(aea_rhek_ctx, "AEA_RHEK", 8);
+    void *rhekKey = do_hkdf(aea_rhek_ctx, 8, mainKey, keySize);
+    if (!rhekKey) {
+        NEO_AA_LogError("malloc failed\n");
+        return -1;
+    }
+    size_t authDataSize = aea->authDataSize;
+    uint8_t *chekPlusAuthData = malloc(authDataSize + 32);
+    memcpy(chekPlusAuthData, (uint8_t *)aea + offsetof(struct aea_archive, cluster0HeaderHMAC), 32);
+    memcpy(chekPlusAuthData + 32, aea->authData, authDataSize);
+    if (hmac_verify(rhekKey, (uint8_t *)aea + offsetof(struct aea_archive, rootHeader), 0x30, chekPlusAuthData, authDataSize + 32, (uint8_t *)aea + offsetof(struct aea_archive, rootHeaderHMAC))) {
+        free(rhekKey);
+        free(chekPlusAuthData);
+        NEO_AA_LogError("AEA_RHEK hmac failed\n");
+        return -1;
+    }
+    free(rhekKey);
+    free(chekPlusAuthData);
+    /*
+     * AEA_RHEK hmac is valid!
+     * We are past the validation that libAppleArchive's
+     * AEADecryptionInputStreamOpen does. However, now we
+     * need to replicate the rest of the checks, which are
+     * done when AAArchiveStreamProcess is called.
+     */
+    return 0;
+}
+
+/*
+ * neo_aa_archive_plain_with_neo_aea_archive_verify
+ *
+ * Verifies the ECDSA-P256 signature, as well as
+ * HKDF / HMAC verification. If valid, it will
+ * get the NeoAAArchivePlain from the NeoAEAArchive.
+ * If you want to extract without validation, use
+ * neo_aa_archive_plain_with_neo_aea_archive. If
+ * You only want to verify, use neo_aea_archive_verify.
+ */
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
+    if (neo_aea_archive_verify(aea, publicKey)) {
+        return neo_aa_archive_plain_with_neo_aea_archive(aea);
+    }
+    return 0;
 }
