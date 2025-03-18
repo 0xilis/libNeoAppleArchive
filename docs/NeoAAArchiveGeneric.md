@@ -1,6 +1,6 @@
 # NeoAAArchiveGeneric
 
-NeoAAArchiveGeneric is a type that is for representing a generic Apple Archive. This means it can represent RAW and LZFSE compressed Apple Archives. It is intended to support ZLIB, LZ4 and LZMA compression, however this has not yet been added to libNeoAppleArchive. It holds the uncompressed, raw `NeoAAArchivePlain` in the `raw` field.
+NeoAAArchiveGeneric is a type that is for representing a generic Apple Archive. This means it can represent RAW, LZFSE, and ZLIB compressed Apple Archives. It is intended to support LZBITMAP, LZ4 and LZMA compression, however this has not yet been added to libNeoAppleArchive (although LZBITMAP is in the aea side). It holds the uncompressed, raw `NeoAAArchivePlain` in the `raw` field.
 
 | Function      | Notes      |
 | ------------- | ------------- |
