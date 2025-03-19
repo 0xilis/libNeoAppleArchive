@@ -27,6 +27,8 @@ void __attribute__((deprecated)) neo_aa_header_add_field_string(NeoAAHeader head
 void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
 void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
 void neo_aa_header_set_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value);
+void neo_aa_header_remove_field(NeoAAHeader header, uint32_t key);
+void neo_aa_header_remove_field_at_index(NeoAAHeader header, int keyIndex);
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header);
 NeoAAFieldType neo_aa_header_get_field_type(NeoAAHeader header, int index);
 

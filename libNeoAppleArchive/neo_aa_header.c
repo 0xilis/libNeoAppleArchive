@@ -692,7 +692,85 @@ void neo_aa_header_set_field_timespec(NeoAAHeader header, uint32_t key, size_t f
     void *encodedValuePtr = (uint8_t *)encodedData + encodedDataPos + 4;
     memcpy(encodedValuePtr, &value, fieldSize);
 }
-    
+
+void neo_aa_header_remove_field(NeoAAHeader header, uint32_t key) {
+    /* TODO: Test function more */
+    NEO_AA_NullParamAssert(header);
+
+    int keyIndex = neo_aa_header_get_field_key_index(header, key);
+    if (keyIndex == -1) {
+        NEO_AA_LogError("field key not found\n");
+        return;
+    }
+    neo_aa_header_remove_field_at_index(header, keyIndex);
+}
+
+void neo_aa_header_remove_field_at_index(NeoAAHeader header, int keyIndex) {
+
+    /* Get the size of the field to remove */
+    size_t fieldSize = header->fieldKeySizes[keyIndex];
+    size_t encodedFieldSize = fieldSize + 4; /* 4 bytes for the key and subtype */
+
+    /* Calculate the position of the field in the encoded data */
+    uint64_t fieldKeyEncodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
+    if (!fieldKeyEncodedDataPos) {
+        NEO_AA_LogError("failed to find position of key in encoded data\n");
+        return;
+    }
+
+    /* Remove the field from the encoded data */
+    char *encodedData = header->encodedData;
+    size_t oldSize = header->headerSize;
+    size_t newSize = oldSize - encodedFieldSize;
+
+    /* Shift the remaining data in encodedData to overwrite the removed field */
+    memmove(encodedData + fieldKeyEncodedDataPos,
+            encodedData + fieldKeyEncodedDataPos + encodedFieldSize,
+            oldSize - (fieldKeyEncodedDataPos + encodedFieldSize));
+
+    /* Reallocate encodedData to the new size */
+    char *newEncodedData = realloc(encodedData, newSize);
+    if (!newEncodedData) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+    header->encodedData = newEncodedData;
+    header->headerSize = newSize;
+
+    /* Free the field value if it exists */
+    void *fieldValue = header->fieldValues[keyIndex];
+    if (fieldValue) {
+        free(fieldValue);
+    }
+
+    /* Shift the remaining fields in the arrays to fill the gap */
+    uint32_t fieldCount = header->fieldCount;
+    for (int i = keyIndex; i < fieldCount - 1; i++) {
+        header->fieldKeys[i] = header->fieldKeys[i + 1];
+        header->fieldTypes[i] = header->fieldTypes[i + 1];
+        header->fieldValues[i] = header->fieldValues[i + 1];
+        header->fieldKeySizes[i] = header->fieldKeySizes[i + 1];
+    }
+
+    /* Reallocate the arrays to the new size */
+    /* TODO: Handle realloc() failure */
+    uint32_t *newFieldKeys = realloc(header->fieldKeys, (fieldCount - 1) * sizeof(uint32_t));
+    char *newFieldTypes = realloc(header->fieldTypes, fieldCount - 1);
+    void **newFieldValues = realloc(header->fieldValues, (fieldCount - 1) * sizeof(void *));
+    size_t *newFieldKeySizes = realloc(header->fieldKeySizes, (fieldCount - 1) * sizeof(size_t));
+
+    if (!newFieldKeys || !newFieldTypes || !newFieldValues || !newFieldKeySizes) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
+
+    /* Update the header fields */
+    header->fieldKeys = newFieldKeys;
+    header->fieldTypes = newFieldTypes;
+    header->fieldValues = newFieldValues;
+    header->fieldKeySizes = newFieldKeySizes;
+    header->fieldCount = fieldCount - 1;
+}
 
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
     NEO_AA_NullParamAssert(header);
