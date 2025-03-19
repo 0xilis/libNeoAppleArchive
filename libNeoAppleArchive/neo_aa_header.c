@@ -510,38 +510,80 @@ void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t str
 }
 
 void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
-    /* TODO: This is gonna be hell with fixing encodedData... */
-    fprintf(stderr,"THIS FUNCTION IS NOT DONE YET!!! DO NOT USE IT!!!\n");
     NEO_AA_NullParamAssert(header);
     internal_do_not_call_is_field_key_available(key);
+
     int keyIndex = neo_aa_header_get_field_key_index(header, key);
     if (keyIndex == -1) {
         neo_aa_header_add_field_string(header, key, stringSize, s);
         return;
     }
-    /* malloc new string and copy it */
-    char *stringField = malloc(stringSize);
-    NEO_AA_AssertHeapAlloc(stringField);
+
+    size_t oldStringSize = neo_aa_header_get_field_size(header, keyIndex);
+    size_t oldAllocationSize = oldStringSize + 2;
+
+    size_t newAllocationSize = stringSize + 2;
+
     uint64_t fieldKeyEncodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
+    if (!fieldKeyEncodedDataPos) {
+        NEO_AA_LogError("failed to find position of key in encoded data\n");
+        return;
+    }
+
     char *encodedData = header->encodedData;
-    NeoAAFieldType fieldType = neo_aa_header_get_field_type(header, keyIndex);
-    size_t allocationSizeForEncodedData = neo_aa_header_get_field_size(header, keyIndex);
-    if (fieldType == NEO_AA_FIELD_TYPE_STRING) {
-        /* add 2 for the string size in the encodedData */
-        allocationSizeForEncodedData += 2;
-    } else {
-        /* Subtype in encodedData is NOT for NEO_AA_FIELD_TYPE_STRING!!! Correct it... */
-        encodedData[fieldKeyEncodedDataPos + 3] = 'P';
+
+    /* Check for overflow */
+    if (newAllocationSize > oldAllocationSize) {
+        /* Need to reallocate the encodedData to fit the new string size */
+        size_t oldSize = header->headerSize;
+        size_t newSize = oldSize + (newAllocationSize - oldAllocationSize);
+
+        char *newEncodedData = realloc(encodedData, newSize);
+        if (!newEncodedData) {
+            NEO_AA_ErrorHeapAlloc();
+            return;
+        }
+
+        header->encodedData = newEncodedData;
+        header->headerSize = newSize;
+
+        memmove(newEncodedData + fieldKeyEncodedDataPos + 4 + newAllocationSize,
+                newEncodedData + fieldKeyEncodedDataPos + 4 + oldAllocationSize,
+                oldSize - (fieldKeyEncodedDataPos + 4 + oldAllocationSize));
+
+        encodedData = newEncodedData;
     }
-    if ((stringSize + 2) <= allocationSizeForEncodedData) {
-        /* encodedData alloc should fit already, do not realloc() */
-        
+
+    uint16_t stringSizeDowncast = (uint16_t)stringSize;
+    memcpy(encodedData + fieldKeyEncodedDataPos + 4, &stringSizeDowncast, 2);
+
+    if (stringSize > 0) {
+        memcpy(encodedData + fieldKeyEncodedDataPos + 6, s, stringSize);
     }
-    void *fieldValue = header->fieldValues[keyIndex];
-    header->fieldValues[keyIndex] = 0;
-    /* free old allocated value for field */
-    free(fieldValue);
-    
+
+    header->fieldKeySizes[keyIndex] = stringSize;
+
+    void *oldFieldValue = header->fieldValues[keyIndex];
+    if (oldFieldValue) {
+        free(oldFieldValue);
+    }
+
+    char *newFieldValue = NULL;
+    if (stringSize > 0) {
+        newFieldValue = malloc(stringSize);
+        if (!newFieldValue) {
+            NEO_AA_ErrorHeapAlloc();
+            return;
+        }
+        strncpy(newFieldValue, s, stringSize);
+        /* libAppleArchive doesn't NULL terminate the string so I won't here */
+    }
+
+    header->fieldValues[keyIndex] = newFieldValue;
+
+    if (header->fieldTypes[keyIndex] != NEO_AA_FIELD_TYPE_STRING) {
+        header->fieldTypes[keyIndex] = NEO_AA_FIELD_TYPE_STRING;
+    }
 }
 
 void neo_aa_header_add_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
