@@ -6,6 +6,7 @@
  */
 
 #include "libNeoAppleArchive.h"
+#include "libNeoAppleArchive_internal.h"
 #include <zlib.h>
 
 uint16_t internal_do_not_call_flip_edian_16(uint16_t num) {
