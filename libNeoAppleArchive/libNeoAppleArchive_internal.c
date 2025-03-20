@@ -18,9 +18,9 @@ uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
 
 size_t lastLoadedBinarySize_internal_do_not_use = 0;
 
-char *internal_do_not_call_load_binary(const char *signedShortcutPath) {
-    /* load AEA archive into memory */
-    FILE *fp = fopen(signedShortcutPath,"r");
+char *internal_do_not_call_load_binary(const char *binaryPath) {
+    /* load binary into memory */
+    FILE *fp = fopen(binaryPath,"rb");
     if (!fp) {
         fprintf(stderr,"libNeoAppleArchive: failed to find path\n");
         return NULL;

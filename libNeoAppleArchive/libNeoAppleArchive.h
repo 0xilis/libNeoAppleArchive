@@ -126,7 +126,6 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 #define NEO_AA_COMPRESSION_ZLIB 0x505
 #endif
 
-#include "libNeoAppleArchive_internal.h"
 #include "neo_aa_header.h"
 #include "neo_aea_archive.h"
 
