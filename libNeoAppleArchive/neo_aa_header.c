@@ -515,7 +515,15 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
 
     int keyIndex = neo_aa_header_get_field_key_index(header, key);
     if (keyIndex == -1) {
+        /*
+         * We mark neo_aa_header_add_field_string deprecated for user
+         * but we still want to use it internally
+         * So turn off deprecations for just here
+         */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         neo_aa_header_add_field_string(header, key, stringSize, s);
+#pragma GCC diagnostic pop
         return;
     }
 
@@ -745,7 +753,7 @@ void neo_aa_header_remove_field_at_index(NeoAAHeader header, int keyIndex) {
 
     /* Shift the remaining fields in the arrays to fill the gap */
     uint32_t fieldCount = header->fieldCount;
-    for (int i = keyIndex; i < fieldCount - 1; i++) {
+    for (unsigned int i = keyIndex; i < fieldCount - 1; i++) {
         header->fieldKeys[i] = header->fieldKeys[i + 1];
         header->fieldTypes[i] = header->fieldTypes[i + 1];
         header->fieldValues[i] = header->fieldValues[i + 1];

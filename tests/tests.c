@@ -9,9 +9,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "libNeoAppleArchive/libNeoAppleArchive.h"
+#include <libNeoAppleArchive.h>
 
 int main(int argc, const char * argv[]) {
+    (void)argc;
+    (void)argv;
     /* TODO: More tests and implement a signal handler. Currently this is mainly NeoAAHeader tests and doesn't test NeoAAArchiveItem or NeoAAArchivePlain yet. */
     printf("start test...\n");
     NeoAAHeader header = neo_aa_header_create();
