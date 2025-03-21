@@ -1219,32 +1219,32 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
 
     if (aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
         NEO_AA_LogError("Verification only supported for profile 0 (ECDSA-P256)\n");
-        return 0;
+        return -1;
     }
 
     if (aea->authDataSize == 0 || aea->signature == NULL) {
         NEO_AA_LogError("Invalid authDataSize or signature\n");
-        return 0;
+        return -1;
     }
 
     /* Verify public key format */
     if (!publicKey || publicKey[0] != 0x04) {
         NEO_AA_LogError("Invalid public key format: must be uncompressed X9.63 (65 bytes, starting with 0x04)\n");
-        return 0;
+        return -1;
     }
 
     /* Create an EVP_PKEY context for the public key */
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
     if (!ctx) {
         OPENSSL_ERR_PRINT();
-        return 0;
+        return -1;
     }
 
     /* Initialize the context for key creation */
     if (EVP_PKEY_fromdata_init(ctx) <= 0) {
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
-        return 0;
+        return -1;
     }
 
     /* Build the parameters for the public key */
@@ -1252,7 +1252,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     if (!param_bld) {
         OPENSSL_ERR_PRINT();
         EVP_PKEY_CTX_free(ctx);
-        return 0;
+        return -1;
     }
 
     /* Set the curve name (secp256r1) */
@@ -1260,7 +1260,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         OPENSSL_ERR_PRINT();
         OSSL_PARAM_BLD_free(param_bld);
         EVP_PKEY_CTX_free(ctx);
-        return 0;
+        return -1;
     }
 
     /* Set the public key */
@@ -1268,7 +1268,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         OPENSSL_ERR_PRINT();
         OSSL_PARAM_BLD_free(param_bld);
         EVP_PKEY_CTX_free(ctx);
-        return 0;
+        return -1;
     }
 
     /* Convert the parameter builder to parameters */
@@ -1277,7 +1277,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         OPENSSL_ERR_PRINT();
         OSSL_PARAM_BLD_free(param_bld);
         EVP_PKEY_CTX_free(ctx);
-        return 0;
+        return -1;
     }
 
     /* Create the EVP_PKEY object from the parameters */
@@ -1287,7 +1287,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         OSSL_PARAM_free(params);
         OSSL_PARAM_BLD_free(param_bld);
         EVP_PKEY_CTX_free(ctx);
-        return 0;
+        return -1;
     }
 
     /* Free the parameter builder and parameters */
@@ -1300,7 +1300,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     if (!md_ctx) {
         OPENSSL_ERR_PRINT();
         EVP_PKEY_free(pkey);
-        return 0;
+        return -1;
     }
 
     /* Initialize the digest context for verification */
@@ -1308,7 +1308,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         OPENSSL_ERR_PRINT();
         EVP_MD_CTX_free(md_ctx);
         EVP_PKEY_free(pkey);
-        return 0;
+        return -1;
     }
 
     /* Create prologue copy to check */
@@ -1327,14 +1327,14 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         EVP_MD_CTX_free(md_ctx);
         EVP_PKEY_free(pkey);
         free(prologueCopy);
-        return 0;
+        return -1;
     }
 
     /* Parse asn1 signature */
     int asn1len = ecdsa_p256_signature_asn1_len(aea->signature, 128);
     if (!asn1len) {
         NEO_AA_LogError("Failed to parse ASN.1");
-        return 0;
+        return -1;
     }
 
     /* Finalize the verification */
