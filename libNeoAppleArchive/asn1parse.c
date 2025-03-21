@@ -47,12 +47,6 @@ int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
         return 0;
     }
     uint8_t prologueSignatureRSize = prologueSignature[3];
-    if (prologueSignatureRSize < 32) {
-        /*
-         * R *must* be 256 bits.
-         */
-        return 0;
-    }
     if (prologueSignatureRSize+4 > prologueSignatureSize) {
         /*
          * Our R goes past the signature size!
@@ -62,7 +56,7 @@ int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
     }
     prologueSignature += 4;
     uint8_t zeroBytes = prologueSignatureRSize - 32;
-    if (zeroBytes) {
+    if (zeroBytes && prologueSignatureRSize >= 32) {
         /* r is 0x21, double check that bits are 0 */
         for (int i = 0; i < zeroBytes; i++) {
             if (prologueSignature[i]) {
@@ -70,10 +64,6 @@ int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
             }
         }
     }
-    /* for (int i = 0; i < 32; i++) { */
-        /* Fill with r value */
-        /* sig[i] = prologueSignature[i+zeroBytes]; */
-    /* } */
     /* Move to s of prologue signature */
     prologueSignature += prologueSignatureRSize;
     if (prologueSignature[0] != 0x02) {
@@ -85,12 +75,6 @@ int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
         return 0;
     }
     uint8_t prologueSignatureSSize = prologueSignature[1];
-    if (prologueSignatureSSize < 32) {
-        /*
-         * S *must* be 256 bits.
-         */
-        return 0;
-    }
     if (prologueSignatureSSize+prologueSignatureRSize+6 > prologueSignatureSize) {
         /*
          * R|S goes past the signature size!
@@ -99,7 +83,7 @@ int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
         return 0;
     }
     zeroBytes = prologueSignatureSSize - 32;
-    if (zeroBytes) {
+    if (zeroBytes && prologueSignatureSSize >= 32) {
         /* s is 0x21, double check that bits are 0 */
         for (int i = 0; i < zeroBytes; i++) {
             if (prologueSignature[i+2]) {
@@ -107,10 +91,5 @@ int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
             }
         }
     }
-    /* for (int i = 32; i < 64; i++) { */
-        /* Fill with s value */
-        /* sig[i] = prologueSignature[i+2+zeroBytes]; */
-    /* } */
-    /* sig should now be r|s */
     return 32+2+zeroBytes+prologueSignatureRSize+4;
 }
