@@ -1,6 +1,6 @@
 buildDir = build
 CC = clang
-CFLAGS += -fPIC -Os -Wall -pedantic -Wextra -I../libNeoAppleArchive
+CFLAGS += -fPIC -Wall -pedantic -Wextra -I../libNeoAppleArchive -g -fsanitize=address
 
 NEOAPPLEARCHIVE_DIR = ../
 
@@ -11,7 +11,7 @@ output: $(buildDir)
 
 	@ # Build tests
 	@echo "building tests..."
-	@$(CC) *.c -L../build/usr/lib -L../build/lzfse/lib -L../build/libzbitmap/lib -o build/tests -llzfse -lzbitmap -lNeoAppleArchive -lz -Os $(CFLAGS)
+	@$(CC) *.c -L../build/usr/lib -L../build/lzfse/lib -L../build/libzbitmap/lib -o build/tests -llzfse -lzbitmap -lNeoAppleArchive -lz $(CFLAGS)
 
 $(buildDir):
 	@echo "Creating Build Directory"

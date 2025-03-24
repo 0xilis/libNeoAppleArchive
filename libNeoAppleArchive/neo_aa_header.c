@@ -528,7 +528,10 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
     }
 
     size_t oldStringSize = neo_aa_header_get_field_size(header, keyIndex);
-    size_t oldAllocationSize = oldStringSize + 2;
+    size_t oldAllocationSize = oldStringSize;
+    if (NEO_AA_FIELD_TYPE_STRING == header->fieldTypes[keyIndex]) {
+        oldAllocationSize += 2;
+    }
 
     size_t newAllocationSize = stringSize + 2;
 
@@ -555,9 +558,14 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
         header->encodedData = newEncodedData;
         header->headerSize = newSize;
 
-        memmove(newEncodedData + fieldKeyEncodedDataPos + 4 + newAllocationSize,
+        /* Ensure that the moveSize is non-negative before calling memmove */
+        size_t moveSize = oldSize - (fieldKeyEncodedDataPos + 4 + oldAllocationSize);
+
+        if (moveSize > 0) {
+            memmove(newEncodedData + fieldKeyEncodedDataPos + 4 + newAllocationSize,
                 newEncodedData + fieldKeyEncodedDataPos + 4 + oldAllocationSize,
-                oldSize - (fieldKeyEncodedDataPos + 4 + oldAllocationSize));
+                moveSize);
+        }
 
         encodedData = newEncodedData;
     }

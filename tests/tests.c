@@ -157,6 +157,42 @@ int main(int argc, const char * argv[]) {
         neo_aa_header_destroy(header);
         return -1;
     }
+    /* Test set_field_string over existing uint */
+    neo_aa_header_set_field_uint(header, NEO_AA_FIELD_C("BAK"), 1, 'E');
+    int bakIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("BAK"));
+    if (bakIndex == -1) {
+        fprintf(stderr,"bakIndex is -1\n");
+        neo_aa_header_destroy(header);
+        return -1;
+    }
+    if (neo_aa_header_get_field_type(header, bakIndex) != NEO_AA_FIELD_TYPE_UINT) {
+        fprintf(stderr,"BAK field is not NEO_AA_FIELD_TYPE_UINT\n");
+        neo_aa_header_destroy(header);
+        return -1;
+    }
+    neo_aa_header_set_field_string(header, NEO_AA_FIELD_C("BAK"), 5, "Hello"); // This call crashes
+    if (neo_aa_header_get_field_type(header, bakIndex) != NEO_AA_FIELD_TYPE_STRING) {
+        fprintf(stderr,"BAK field is not NEO_AA_FIELD_TYPE_STRING\n");
+        neo_aa_header_destroy(header);
+        return -1;
+    }
+    if (neo_aa_header_get_field_size(header, bakIndex) != 5) {
+        fprintf(stderr,"BAK field size is not 5\n");
+        neo_aa_header_destroy(header);
+        return -1;
+    }
+    neo_aa_header_set_field_string(header, NEO_AA_FIELD_C("BAK"), 2, "Hi");
+    if (neo_aa_header_get_field_size(header, bakIndex) != 2) {
+        fprintf(stderr,"BAK field size is not 5\n");
+        neo_aa_header_destroy(header);
+        return -1;
+    }
+    neo_aa_header_remove_field(header, NEO_AA_FIELD_C("BAK"));
+    if (neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("BAK")) != -1) {
+        fprintf(stderr,"BAK still in header after removal\n");
+        neo_aa_header_destroy(header);
+        return -1;
+    }
     unsigned char *encodedDataOfModifiedKeyHeader = (unsigned char*)header->encodedData;
     if (encodedDataOfModifiedKeyHeader[9] != '1' || encodedDataOfModifiedKeyHeader[10] != 'E' || encodedDataOfModifiedKeyHeader[11] != 'P') {
         fprintf(stderr,"TYP setting made encoded data corrupt in header\n");
