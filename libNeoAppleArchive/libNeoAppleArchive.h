@@ -113,12 +113,6 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 }
 #define NEO_AA_FIELD_C(s) internal_do_not_call_ez_make_field_key(s)
 
-/* My Arch Linux build system is bad and doesn't work if I include limits.h for some reason. Rather than fixing like I should, I define the limits here... */
-
-#ifndef USHRT_MAX
-#define USHRT_MAX 65535
-#endif
-
 /* Compliant with the one defined in libAppleArchive, which is compliant with libcompression */
 #ifndef NEO_AA_COMPRESSION_LZFSE
 #define NEO_AA_COMPRESSION_LZFSE 0x801

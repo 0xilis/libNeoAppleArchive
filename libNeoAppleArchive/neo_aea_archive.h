@@ -24,7 +24,14 @@
 #include <openssl/err.h>
 #include <stdbool.h>
 
-#define OPENSSL_ERR_PRINT() fprintf(stderr, "OpenSSL Error at %s in %s:%d: \n", __func__, __FILE__, __LINE__); ERR_print_errors_fp(stderr)
+__attribute__((used)) static int openssl_print_cb(const char *str, size_t len, void *ctx) {
+    return fwrite(str, len, 1, (FILE*)ctx);
+}
+
+#define OPENSSL_ERR_PRINT() do { \
+    fprintf(stderr, "OpenSSL Error at %s in %s:%d:\n", __func__, __FILE__, __LINE__); \
+    ERR_print_errors_cb(openssl_print_cb, stderr); \
+} while(0)
 
 /* Different types of AEA, should be same as AEAProfiles definition */
 typedef enum {
