@@ -1331,8 +1331,8 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     }
 
     /* Parse asn1 signature */
-    int asn1len = ecdsa_p256_signature_asn1_len(aea->signature, 128);
-    if (!asn1len) {
+    unsigned int asn1len = ecdsa_p256_signature_asn1_len(aea->signature, 128);
+    if (!asn1len || asn1len > 128) {
         NEO_AA_LogError("Failed to parse ASN.1");
         return -1;
     }

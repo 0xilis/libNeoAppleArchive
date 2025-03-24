@@ -23,6 +23,6 @@
  * Returns a negative error code on failure.
  * Please have sig be 64 bytes.
  */
-int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize);
+unsigned int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize);
 
 #endif /* asn1parse_h */
