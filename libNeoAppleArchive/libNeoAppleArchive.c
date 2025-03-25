@@ -112,7 +112,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             mkdir(pathName);
 #else
             mkdir(pathName, accessMode);
-            int fd = open(pathName, O_RDONLY);
+            int fd = open(pathName, O_RDWR | O_NOFOLLOW);
             if (fd != -1) {
                 fstat(fd, &st);
                 uid_t fileUid = st.st_uid;
@@ -124,14 +124,14 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                     fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
                 }
                 fchown(fd, fileUid, fileGid);
+                if (xatIndex != -1) {
+                    xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
+                    uint8_t *xattrBlob = currentHeader + headerSize;
+                    internal_do_not_call_apply_xattr_blob_to_fd(xattrBlob, xatSize, fd);
+                }
                 close(fd);
             }
 #endif
-            if (xatIndex != -1) {
-                xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
-                uint8_t *xattrBlob = currentHeader + headerSize;
-                internal_do_not_call_apply_xattr_blob_to_path(xattrBlob, xatSize, pathName);
-            }
             currentHeader += (headerSize + xatSize);
         } else if (typEntryType == 'F') {
             /* Header for file */
@@ -152,7 +152,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 fprintf(stderr, "neo_aa_extract_aar_to_path: dataSize overflow\n");
                 return;
             }
-            FILE *fp = fopen(pathName, "w");
+            FILE *fp = fopen(pathName, "w+");
             if (!fp) {
                 free(appleArchive);
                 fprintf(stderr, "neo_aa_extract_aar_to_path: could not open pathName: %s\n",pathName);
@@ -162,11 +162,10 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             uint8_t *fileData = currentHeader + headerSize;
             /* copy file data to buffer */
             fwrite(fileData, dataSize, 1, fp);
-            fclose(fp);
 #if defined(_WIN32) || defined(WIN32)
             /* Windows does not implement unix uid_t/gid_t */
 #else
-            int fd = open(pathName, O_RDONLY);
+            int fd = fileno(fp);
             if (fd != -1) {
                 fstat(fd, &st);
                 uid_t fileUid = st.st_uid;
@@ -181,15 +180,15 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 if (modIndex != -1) {
                     fchmod(fd, accessMode);
                 }
-                close(fd);
             }
 #endif
             size_t xatSize = 0;
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
                 uint8_t *xattrBlob = currentHeader + headerSize + dataSize;
-                internal_do_not_call_apply_xattr_blob_to_path(xattrBlob, xatSize, pathName);
+                internal_do_not_call_apply_xattr_blob_to_fd(xattrBlob, xatSize, fd);
             }
+            fclose(fp);
             currentHeader += (headerSize + dataSize + xatSize);
         } else {
             free(pathName);

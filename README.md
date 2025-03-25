@@ -1,8 +1,7 @@
 # libNeoAppleArchive
-Unfinished cross-compat library for parsing Apple Archive (and, by extension, YAA).
+Cross-compat library for parsing Apple Archive and Apple Encrypted Archive.
 
 ### What isn't finished
-- Any archive with a type other than directory, regular file or symlink. Be aware this is rare however for user created `.aar`s
 - LZMA and LZ4 compressed `.aar`s; only `RAW`, `LZFSE`, and `ZLIB` are currently supported
 - Multi-Threadded support
 

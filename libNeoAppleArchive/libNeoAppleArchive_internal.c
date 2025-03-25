@@ -52,7 +52,7 @@ internal_do_not_call_memrchr_fast_loop:
     return NULL;
 }
 
-void internal_do_not_call_apply_xattr_blob_to_path(uint8_t *blob, size_t blobSize, const char *path) {
+void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob, size_t blobSize, int fd) {
 #if defined(__APPLE__) || defined(__linux__)
     uint32_t blobPosition = 0;
     while (blobPosition < blobSize) {
@@ -77,18 +77,18 @@ void internal_do_not_call_apply_xattr_blob_to_path(uint8_t *blob, size_t blobSiz
         size_t xattrValueLen = xatItemSize - (4 + xattrNameLen + 1);
 #if defined(__linux__)
         if (xattrValueLen) {
-            setxattr(path, xattrName, xattrValue, xattrValueLen, 0);
+            fsetxattr(fd, xattrName, xattrValue, xattrValueLen, 0);
         } else {
             /* xattr has no value ???; use 0 for the value */
-            setxattr(path, xattrName, 0, 0, 0);
+            fsetxattr(fd, xattrName, 0, 0, 0);
         }
 #else
         /* macOS */
         if (xattrValueLen) {
-            setxattr(path, xattrName, xattrValue, xattrValueLen, 0, 0);
+            fsetxattr(fd, xattrName, xattrValue, xattrValueLen, 0, 0);
         } else {
             /* xattr has no value ???; use 0 for the value */
-            setxattr(path, xattrName, 0, 0, 0, 0);
+            fsetxattr(fd, xattrName, 0, 0, 0, 0);
         }
 #endif
         blobPosition += xatItemSize;
