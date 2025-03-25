@@ -837,4 +837,3 @@ void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algor
     neo_aa_archive_plain_compress_writefd(plain, algorithm, fd);
     fclose(fp);
 }
-

@@ -430,6 +430,15 @@ void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t field
 }
 
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize) {
+    if (!fieldSize) {
+        if (blobSize < 0xFFFF) {
+            fieldSize = 2;
+        } else if (blobSize < 0xFFFFFFFF) {
+            fieldSize = 4;
+        } else {
+            fieldSize = 8;
+        }
+    }
     /* Blobs are not part of neo_aa_header, you will add the context to a neo_aa_archive_item later. */
     neo_aa_header_set_field_uint_or_blob(header, key, fieldSize, blobSize, NEO_AA_FIELD_TYPE_BLOB);
 }
