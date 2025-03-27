@@ -588,10 +588,7 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
 
     header->fieldKeySizes[keyIndex] = stringSize;
 
-    void *oldFieldValue = header->fieldValues[keyIndex];
-    if (oldFieldValue) {
-        free(oldFieldValue);
-    }
+    free(header->fieldValues[keyIndex]);
 
     char *newFieldValue = NULL;
     if (stringSize > 0) {
@@ -763,10 +760,7 @@ void neo_aa_header_remove_field_at_index(NeoAAHeader header, int keyIndex) {
     header->headerSize = newSize;
 
     /* Free the field value if it exists */
-    void *fieldValue = header->fieldValues[keyIndex];
-    if (fieldValue) {
-        free(fieldValue);
-    }
+    free(header->fieldValues[keyIndex]);
 
     /* Shift the remaining fields in the arrays to fill the gap */
     uint32_t fieldCount = header->fieldCount;

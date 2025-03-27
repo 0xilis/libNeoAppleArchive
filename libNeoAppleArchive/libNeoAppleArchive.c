@@ -349,7 +349,7 @@ void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCo
     NEO_AA_NullParamAssert(items);
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem archiveItem = items[i];
-        neo_aa_header_destroy(archiveItem->header);
+        neo_aa_header_destroy_nozero(archiveItem->header);
         free(archiveItem->encodedBlobData);
         free(archiveItem);
     }
@@ -492,10 +492,7 @@ void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
 
 void neo_aa_archive_item_destroy_nozero(NeoAAArchiveItem item) {
     neo_aa_header_destroy_nozero(item->header);
-    char *encodedBlobData = item->encodedBlobData;
-    if (encodedBlobData) {
-        free(encodedBlobData);
-    }
+    free(item->encodedBlobData);
     free(item);
 }
 

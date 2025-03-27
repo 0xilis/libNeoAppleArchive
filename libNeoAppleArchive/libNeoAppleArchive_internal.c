@@ -225,7 +225,7 @@ size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_da
             archiveItemSize += neo_aa_header_get_field_key_uint(header, i);
         }
     }
-    neo_aa_header_destroy(header);
+    neo_aa_header_destroy_nozero(header);
     return archiveItemSize;
 }
 
