@@ -12,6 +12,10 @@
 #ifndef neo_aa_header_h
 #define neo_aa_header_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 NeoAAHeader neo_aa_header_create(void);
 void neo_aa_header_destroy(NeoAAHeader header);
 void neo_aa_header_destroy_nozero(NeoAAHeader header);
@@ -30,5 +34,9 @@ void neo_aa_header_remove_field(NeoAAHeader header, uint32_t key);
 void neo_aa_header_remove_field_at_index(NeoAAHeader header, int keyIndex);
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header);
 NeoAAFieldType neo_aa_header_get_field_type(NeoAAHeader header, int index);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* neo_aa_header_h */

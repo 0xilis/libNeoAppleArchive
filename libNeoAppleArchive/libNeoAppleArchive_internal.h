@@ -12,6 +12,10 @@
 #ifndef libNeoAppleArchive_internal_h
 #define libNeoAppleArchive_internal_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 uint32_t internal_do_not_call_flip_edian_32(uint32_t num);
 #define FLIP_32(x) internal_do_not_call_flip_edian_32(x)
 
@@ -43,5 +47,9 @@ int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dst
 #define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
 
 #define NEO_INTERNAL_API __attribute__((visibility ("hidden"))) 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* neo_aa_header_h */

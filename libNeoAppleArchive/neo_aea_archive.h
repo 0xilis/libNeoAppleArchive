@@ -24,6 +24,10 @@
 #include <openssl/err.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 __attribute__((used)) static int openssl_print_cb(const char *str, size_t len, void *ctx) {
     return fwrite(str, len, 1, (FILE*)ctx);
 }
@@ -236,5 +240,9 @@ uint32_t neo_aea_archive_profile(NeoAEAArchive aea);
 uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize);
 void neo_aea_archive_destroy(NeoAEAArchive aea);
 int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* neo_aea_archive_h */

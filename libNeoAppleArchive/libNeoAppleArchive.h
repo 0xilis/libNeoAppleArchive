@@ -19,6 +19,10 @@
 #include <time.h>
 #include <inttypes.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct neo_pbzx_archived_directory_header {
     uint32_t magic;
     uint32_t reserved_0;
@@ -150,5 +154,9 @@ typedef enum {
 
 #include "neo_aa_header.h"
 #include "neo_aea_archive.h"
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
