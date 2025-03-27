@@ -158,10 +158,10 @@ struct __attribute__((packed)) aea_archive {
 
 typedef struct aea_archive *NeoAEAArchive;
 
-
-
-
-
+/* Shortened type names */
+#ifndef NO_SHORTENED_NAMES
+typedef NeoAEAArchive NeoAEA;
+#endif
 
 // ======== starting from here: old struct definitions kept for compatibility reasons ========
 

@@ -20,7 +20,6 @@ int neo_aa_header_get_field_key_index(NeoAAHeader header, uint32_t key);
 uint64_t neo_aa_header_get_field_key_uint(NeoAAHeader header, int index);
 char *neo_aa_header_get_field_key_string(NeoAAHeader header, int index);
 size_t neo_aa_header_get_field_size(NeoAAHeader header, int index);
-void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType);
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value);
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize);
 void __attribute__((deprecated)) neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s); /* Please use neo_aa_header_set_field_string */

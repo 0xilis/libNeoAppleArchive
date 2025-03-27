@@ -9,17 +9,13 @@
 #include "libNeoAppleArchive_internal.h"
 #include <zlib.h>
 
-uint16_t internal_do_not_call_flip_edian_16(uint16_t num) {
-    return ((num << 8)&0xff) | ((num >> 8) & 0xff);
-}
-
-uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
+NEO_INTERNAL_API uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
     return ((num>>24)&0xff) | ((num<<8)&0xff0000) | ((num>>8)&0xff00) | ((num<<24)&0xff000000);
 }
 
 size_t lastLoadedBinarySize_internal_do_not_use = 0;
 
-char *internal_do_not_call_load_binary(const char *binaryPath) {
+NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath) {
     /* load binary into memory */
     FILE *fp = fopen(binaryPath,"rb");
     if (!fp) {
@@ -42,7 +38,7 @@ char *internal_do_not_call_load_binary(const char *binaryPath) {
 }
 
 
-char *internal_do_not_call_memrchr(char *s, int c, size_t n) {
+NEO_INTERNAL_API char *internal_do_not_call_memrchr(char *s, int c, size_t n) {
     uint64_t i = n;
 internal_do_not_call_memrchr_fast_loop:
     i--;
@@ -52,7 +48,7 @@ internal_do_not_call_memrchr_fast_loop:
     return NULL;
 }
 
-void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob, size_t blobSize, int fd) {
+NEO_INTERNAL_API void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob, size_t blobSize, int fd) {
 #if defined(__APPLE__) || defined(__linux__)
     uint32_t blobPosition = 0;
     while (blobPosition < blobSize) {
@@ -98,13 +94,13 @@ void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob, size_t blobSize,
 #endif
 }
 
-void internal_do_not_call_is_field_key_available(uint32_t key) {
+NEO_INTERNAL_API void internal_do_not_call_is_field_key_available(uint32_t key) {
     /* These blobs have not yet been implemented */
     NEO_AA_AssertUnsupportedKey(key, "ACL");
     NEO_AA_AssertUnsupportedKey(key, "YAF");
 }
 
-int internal_do_not_call_is_field_type_supported_size(NeoAAFieldType fieldType, size_t fieldSize) {
+NEO_INTERNAL_API int internal_do_not_call_is_field_type_supported_size(NeoAAFieldType fieldType, size_t fieldSize) {
     if (!fieldSize) {
         /* Only flags should be 0 in size */
         return (fieldType == NEO_AA_FIELD_TYPE_FLAG);
@@ -133,7 +129,7 @@ int internal_do_not_call_is_field_type_supported_size(NeoAAFieldType fieldType, 
 }
 
 /* Unsafe since we are assuming that the type corresponds to size, and not taking future field types into account */
-char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t fieldType, size_t fieldSize) {
+NEO_INTERNAL_API char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t fieldType, size_t fieldSize) {
     if (!fieldSize) {
         /* Assume NEO_AA_FIELD_TYPE_FLAG */
         return '*';
@@ -164,7 +160,7 @@ char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t
     return 'F'+(fieldSize>>4);
 }
 
-uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index) {
+NEO_INTERNAL_API uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index) {
     NEO_AA_NullParamAssert(header);
     NEO_AA_NullParamAssert((index >= 0));
     size_t headerSize = header->headerSize;
@@ -200,7 +196,7 @@ uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoA
     return (uint64_t)currentPos;
 }
 
-size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
+NEO_INTERNAL_API size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
     uint32_t *dumbHack = *(uint32_t **)&data;
     uint32_t headerMagic = dumbHack[0];
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
@@ -243,7 +239,7 @@ size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_da
  * Z_MEM_ERROR: if there's insufficient memory to perform the decompression
  * Z_DATA_ERROR: if the input data was corrupt
  */
-int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dstLen) {
+NEO_INTERNAL_API int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dstLen) {
     z_stream strm  = {0};
     strm.total_in  = strm.avail_in  = srcLen;
     strm.total_out = strm.avail_out = dstLen;

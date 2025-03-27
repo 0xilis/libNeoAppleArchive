@@ -12,10 +12,7 @@
 #ifndef libNeoAppleArchive_internal_h
 #define libNeoAppleArchive_internal_h
 
-uint16_t internal_do_not_call_flip_edian_16(uint16_t num);
 uint32_t internal_do_not_call_flip_edian_32(uint32_t num);
-
-#define FLIP_16(x) internal_do_not_call_flip_edian_32(x)
 #define FLIP_32(x) internal_do_not_call_flip_edian_32(x)
 
 #define NEO_AA_NullParamAssert(x) if (!x) {fprintf(stderr,"%s: invalid parameters.\n",__FUNCTION__);exit(1);};
@@ -44,5 +41,7 @@ int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dst
 #define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
 #define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */
 #define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
+
+#define NEO_INTERNAL_API __attribute__((visibility ("hidden"))) 
 
 #endif /* neo_aa_header_h */

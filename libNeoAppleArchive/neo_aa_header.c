@@ -314,7 +314,7 @@ size_t neo_aa_header_get_field_size(NeoAAHeader header, int index) {
     return header->fieldKeySizes[index];
 }
 
-void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
+NEO_INTERNAL_API static void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
     NEO_AA_NullParamAssert(header);
     internal_do_not_call_is_field_key_available(key);
     NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize));
@@ -369,7 +369,7 @@ void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size
     header->fieldKeySizes = fieldKeySizes;
 }
 
-void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
+NEO_INTERNAL_API static void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
     /* TODO: Add support for fixing encodedData with keys that become larger */
     NEO_AA_NullParamAssert(header);
     internal_do_not_call_is_field_key_available(key);
@@ -608,7 +608,7 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
     }
 }
 
-void neo_aa_header_add_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
+NEO_INTERNAL_API static void neo_aa_header_add_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
     NEO_AA_NullParamAssert(header);
     internal_do_not_call_is_field_key_available(key);
     NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize));

@@ -63,6 +63,7 @@ struct neo_aa_archive_item_impl {
 };
 
 typedef struct neo_aa_archive_item_impl *NeoAAArchiveItem;
+typedef NeoAAArchiveItem *NeoAAArchiveItemList;
 
 /* Do not manually access items of neo_aa_archive_plain_impl !!! They are subject to change!!! */
 struct neo_aa_archive_plain_impl {
@@ -80,6 +81,16 @@ struct neo_aa_archive_generic_impl {
 };
 
 typedef struct neo_aa_archive_generic_impl *NeoAAArchiveGeneric;
+
+/* Shortened type names */
+#ifndef NO_SHORTENED_NAMES
+typedef NeoAAArchiveGeneric NeoArchiveGeneric;
+typedef NeoAAArchivePlain NeoArchivePlain;
+typedef NeoAAArchiveItemList NeoArchiveItemList;
+typedef NeoAAArchiveItem NeoArchiveItem;
+typedef NeoAAHeader NeoHeader;
+typedef NeoAAFieldType NeoFieldType;
+#endif
 
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value);
 void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
@@ -118,6 +129,23 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 #define NEO_AA_COMPRESSION_LZFSE 0x801
 #define NEO_AA_COMPRESSION_NONE 0
 #define NEO_AA_COMPRESSION_ZLIB 0x505
+#endif
+
+/* Shortened names */
+
+#ifndef NO_SHORTENED_NAMES
+#define NEO_FIELD_C NEO_AA_FIELD_C
+#define NEO_COMPRESSION_LZFSE NEO_AA_COMPRESSION_LZFSE
+#define NEO_COMPRESSION_NONE NEO_AA_COMPRESSION_NONE
+#define NEO_COMPRESSION_ZLIB NEO_AA_COMPRESSION_ZLIB
+typedef enum {
+    NEO_FIELD_TYPE_FLAG = (uint32_t)0,
+    NEO_FIELD_TYPE_UINT = (uint32_t)1,
+    NEO_FIELD_TYPE_STRING = (uint32_t)2,
+    NEO_FIELD_TYPE_HASH = (uint32_t)3,
+    NEO_FIELD_TYPE_TIMESPEC = (uint32_t)4,
+    NEO_FIELD_TYPE_BLOB = (uint32_t)5,
+} NeoFieldTypes;
 #endif
 
 #include "neo_aa_header.h"
