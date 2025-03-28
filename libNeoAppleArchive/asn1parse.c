@@ -5,6 +5,8 @@
  *  Created by Snoolie Keffaber on 2024/05/09.
  */
 
+#ifndef EXCLUDE_AEA_SUPPORT
+
 #include "asn1parse.h"
 
 /*
@@ -93,3 +95,5 @@ unsigned int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t ma
     }
     return 32+2+zeroBytes+prologueSignatureRSize+4;
 }
+
+#endif /* EXCLUDE_AEA_SUPPORT */

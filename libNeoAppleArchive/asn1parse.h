@@ -5,6 +5,8 @@
  *  Created by Snoolie Keffaber on 2024/05/09.
  */
 
+#ifndef EXCLUDE_AEA_SUPPORT
+
 /* ONLY for ECDSA-P256 signatures !!!! */
 
 #ifndef asn1parse_h
@@ -26,3 +28,5 @@
 unsigned int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize);
 
 #endif /* asn1parse_h */
+
+#endif /* EXCLUDE_AEA_SUPPORT */

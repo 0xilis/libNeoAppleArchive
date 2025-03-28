@@ -6,6 +6,8 @@
  *  Created by Snoolie Keffaber on 2024/05/07.
  */
 
+#ifndef EXCLUDE_AEA_SUPPORT
+
 #ifndef libNeoAppleArchive_h
 #error Include libNeoAppleArchive.h instead of this file
 #endif
@@ -246,3 +248,5 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey);
 #endif
 
 #endif /* neo_aea_archive_h */
+
+#endif /* EXCLUDE_AEA_SUPPORT */

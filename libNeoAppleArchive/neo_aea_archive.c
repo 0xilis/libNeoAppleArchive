@@ -11,6 +11,8 @@
  * as calls are likely to change.
  */
 
+#ifndef EXCLUDE_AEA_SUPPORT
+
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
 #include "neo_aea_archive.h"
@@ -1427,3 +1429,5 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive_verify(NeoAEAArchive
     }
     return 0;
 }
+
+#endif /* EXCLUDE_AEA_SUPPORT */

@@ -10,6 +10,12 @@ BUILD_DIR = ../../../build/lzfse
 LIBZBITMAP_DIR = libNeoAppleArchive/compression/libzbitmap
 libzbitmapBuildDir = build/libzbitmap/lib/
 
+EXCLUDE_AEA_SUPPORT ?= 0
+
+ifeq ($(EXCLUDE_AEA_SUPPORT), 1)
+  CFLAGS += -DEXCLUDE_AEA_SUPPORT=1
+endif
+
 output: $(buildDir) $(libzbitmapBuildDir)
 	@ # Build liblzfse submodule
 	@echo "building liblzfse..."
@@ -24,8 +30,10 @@ output: $(buildDir) $(libzbitmapBuildDir)
 	@$(CC) -c libNeoAppleArchive/neo_aa_header.c -o build/obj/neo_aa_header.o $(CFLAGS)
 	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive_internal.c -o build/obj/libNeoAppleArchive_internal.o $(CFLAGS)
 	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive.c -o build/obj/libNeoAppleArchive.o $(CFLAGS)
-	@$(CC) -c libNeoAppleArchive/neo_aea_archive.c -o build/obj/neo_aea_archive.o $(CFLAGS)
-	@$(CC) -c libNeoAppleArchive/asn1parse.c -o build/obj/asn1parse.o $(CFLAGS)
+	@if [ "$(EXCLUDE_AEA_SUPPORT)" != "1" ]; then \
+		$(CC) -c libNeoAppleArchive/neo_aea_archive.c -o build/obj/neo_aea_archive.o $(CFLAGS); \
+		$(CC) -c libNeoAppleArchive/asn1parse.c -o build/obj/asn1parse.o $(CFLAGS); \
+	fi
 	@ar rcs build/usr/lib/libNeoAppleArchive.a build/obj/*.o
 
 $(libzbitmapBuildDir):
