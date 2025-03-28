@@ -7,6 +7,7 @@
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
+#include <limits.h>
 
 NeoAAHeader neo_aa_header_create(void) {
     NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
