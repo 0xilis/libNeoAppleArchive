@@ -1410,6 +1410,85 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
      * need to replicate the rest of the checks, which are
      * done when AAArchiveStreamProcess is called.
      */
+    /* 
+     * aeaInputStreamLoadSegment AEA_CHEK validation
+     * Here, we check the segment headers and hmac segments in cluster 0
+     * Do validation for other clusters later...
+     */
+    uint8_t *clusterKey = cluster_key(mainKey, 0);
+    if (!clusterKey) {
+        NEO_AA_LogError("malloc failed\n");
+        return -1;
+    }
+    uint8_t *clusterHeaderKey = cluster_header_key(clusterKey, keySize);
+    if (!clusterHeaderKey) {
+        free(clusterKey);
+        NEO_AA_LogError("malloc failed\n");
+        return -1;
+    }
+    /* aeaInputStreamLoadSegment AEA_CHEK validation */
+    /*
+     * I hate this.
+     * Because aea_archive differs from how it is represented in the file
+     * (aea_segment_header has segmentData field)
+     * We need to REFORM the segment headers... argh!
+     * This is expensive for performance, look into other ways to do this...
+     */
+    struct aea_root_header rootHeader = aea->rootHeader;
+    /* Each segment is 40 bytes in size, so we do segmentsPerCluster times 40 for size */
+    uint8_t *segmentHeaderEncodedRepresentation = malloc(rootHeader.segmentsPerCluster * 40);
+    if (!segmentHeaderEncodedRepresentation) {
+        free(clusterKey);
+        NEO_AA_LogError("malloc failed\n");
+        return -1;
+    }
+    struct aea_cluster_header cluster = aea->clusters[0];
+    uint8_t *currentEncodedSegmentHeader = segmentHeaderEncodedRepresentation;
+    for (uint32_t i = 0; i < rootHeader.segmentsPerCluster; i++) {
+        struct aea_segment_header segment = cluster.segments[i];
+        memcpy(currentEncodedSegmentHeader, &segment, 40);
+        currentEncodedSegmentHeader += 40;
+    }
+    /* Get Cluster 0 HMACs */
+    size_t cluster0HmacsSize = (rootHeader.segmentsPerCluster * 32) + 32;
+    uint8_t *cluster0Hmacs = malloc(cluster0HmacsSize);
+    if (!cluster0Hmacs) {
+        free(segmentHeaderEncodedRepresentation);
+        free(clusterKey);
+        NEO_AA_LogError("malloc failed\n");
+        return -1;
+    }
+    memcpy(cluster0Hmacs, cluster.nextClusterHMAC, 32);
+    uint8_t *currentSegmentHMAC = cluster0Hmacs + 32;
+    for (uint32_t i = 0; i < rootHeader.segmentsPerCluster; i++) {
+        struct aea_segment_header segment = cluster.segments[i];
+        memcpy(currentSegmentHMAC, &segment.segmentHMAC, 40);
+        currentSegmentHMAC += 32;
+    }
+    if (hmac_verify(clusterHeaderKey, segmentHeaderEncodedRepresentation, rootHeader.segmentsPerCluster * 40, cluster0Hmacs, cluster0HmacsSize, aea->cluster0HeaderHMAC)) {
+        free(clusterHeaderKey);
+        free(clusterKey);
+        NEO_AA_LogError("AEA_CHEK hmac failed\n");
+        return -1;
+    }
+    free(segmentHeaderEncodedRepresentation);
+    free(cluster0Hmacs);
+    free(clusterHeaderKey);
+    /* Now, we do aeaInputStreamDecryptSegment AEA_SK verification on segments */
+    for (uint32_t i = 0; i < rootHeader.segmentsPerCluster; i++) {
+        struct aea_segment_header segment = cluster.segments[i];
+        if (!segment.compressedSize) {
+            /* We reached an empty segment, return */
+            break;
+        }
+        uint8_t *segmentKey = segment_key(clusterKey, i, keySize);
+        if (hmac_verify(segmentKey, segment.segmentData, segment.compressedSize, 0, 0, segment.segmentHMAC)) {
+            NEO_AA_LogErrorF("segment %d failed verification\n",i);
+            return -1;
+        }
+        free(segmentKey);
+    }
+    free(clusterKey);
     return 0;
 }
 
