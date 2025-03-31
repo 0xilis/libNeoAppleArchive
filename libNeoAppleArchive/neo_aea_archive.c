@@ -1435,6 +1435,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
      * This is expensive for performance, look into other ways to do this...
      */
     struct aea_root_header rootHeader = aea->rootHeader;
+    struct aea_cluster_header cluster = aea->clusters[0];
     /* Each segment is 40 bytes in size, so we do segmentsPerCluster times 40 for size */
     uint8_t *segmentHeaderEncodedRepresentation = malloc(rootHeader.segmentsPerCluster * 40);
     if (!segmentHeaderEncodedRepresentation) {
@@ -1442,11 +1443,11 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         NEO_AA_LogError("malloc failed\n");
         return -1;
     }
-    struct aea_cluster_header cluster = aea->clusters[0];
     uint8_t *currentEncodedSegmentHeader = segmentHeaderEncodedRepresentation;
     for (uint32_t i = 0; i < rootHeader.segmentsPerCluster; i++) {
         struct aea_segment_header segment = cluster.segments[i];
-        memcpy(currentEncodedSegmentHeader, &segment, 40);
+        memcpy(currentEncodedSegmentHeader, &segment, 8);
+        memcpy(currentEncodedSegmentHeader + 8, segment.hash, 32);
         currentEncodedSegmentHeader += 40;
     }
     /* Get Cluster 0 HMACs */
@@ -1462,7 +1463,7 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     uint8_t *currentSegmentHMAC = cluster0Hmacs + 32;
     for (uint32_t i = 0; i < rootHeader.segmentsPerCluster; i++) {
         struct aea_segment_header segment = cluster.segments[i];
-        memcpy(currentSegmentHMAC, &segment.segmentHMAC, 40);
+        memcpy(currentSegmentHMAC, &segment.segmentHMAC, 32);
         currentSegmentHMAC += 32;
     }
     if (hmac_verify(clusterHeaderKey, segmentHeaderEncodedRepresentation, rootHeader.segmentsPerCluster * 40, cluster0Hmacs, cluster0HmacsSize, aea->cluster0HeaderHMAC)) {
