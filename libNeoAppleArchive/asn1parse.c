@@ -85,10 +85,6 @@ unsigned int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t ma
         return 0;
     }
     zeroBytes = prologueSignatureSSize - 32;
-    if (prologueSignatureSSize < 32) {
-        /* If prologueSignatureSSize under 32, manually make zeroBytes 0 */
-        zeroBytes = 0;
-    }
     if (zeroBytes && prologueSignatureSSize >= 32) {
         /* s is 0x21, double check that bits are 0 */
         for (int i = 0; i < zeroBytes; i++) {
@@ -97,7 +93,7 @@ unsigned int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t ma
             }
         }
     }
-    return 32+2+zeroBytes+prologueSignatureRSize+4;
+    return 2+prologueSignatureSSize+prologueSignatureRSize+4;
 }
 
 #endif /* EXCLUDE_AEA_SUPPORT */
