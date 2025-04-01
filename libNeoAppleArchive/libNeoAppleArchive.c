@@ -806,7 +806,7 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         ptr->uncompressedSize = FLIP_32((uint32_t)archiveSize);
         /* Skip past header */
         compressed += sizeof(struct neo_pbzx_archived_directory_header);
-        size_t compressedSize = lzfse_encode_buffer(compressed, archiveSize + 100, (uint8_t *)buffer, archiveSize, 0);
+        size_t compressedSize = lzfse_encode_buffer(compressed, (archiveSize + 100) - sizeof(struct neo_pbzx_archived_directory_header), (uint8_t *)buffer, archiveSize, 0);
         ptr->compressedSize = FLIP_32((uint32_t)compressedSize);
         free(buffer);
         write(fd, compressed - sizeof(struct neo_pbzx_archived_directory_header), compressedSize + sizeof(struct neo_pbzx_archived_directory_header));
