@@ -557,7 +557,7 @@ __attribute__((visibility ("hidden"))) struct aea_cluster_header new_partial_clu
     return cluster;
 }
 
-NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
+NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
     NEO_AA_NullParamAssert(encodedData);
     NeoAEAArchive aea = calloc(1, sizeof(struct aea_archive));
     if (!aea) {
@@ -674,7 +674,11 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
     return aea;
 }
 
-NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
+NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
+    return neo_aea_with_encoded_data_nocopy(encodedData, encodedDataSize);
+}
+
+NeoAEAArchive neo_aea_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
     NEO_AA_NullParamAssert(encodedData);
     uint8_t *encodedDataCopy = malloc(encodedDataSize);
     if (!encodedDataCopy) {
@@ -682,7 +686,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t enc
         return 0;
     }
     memcpy(encodedDataCopy, encodedData, encodedDataSize);
-    NeoAEAArchive aea = neo_aea_archive_with_encoded_data_nocopy(encodedDataCopy, encodedDataSize);
+    NeoAEAArchive aea = neo_aea_with_encoded_data_nocopy(encodedDataCopy, encodedDataSize);
     if (!aea) {
         free(encodedDataCopy);
         return NULL;
@@ -690,7 +694,11 @@ NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t enc
     return aea;
 }
 
-NeoAEAArchive neo_aea_archive_with_path(const char *path) {
+NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
+    return neo_aea_with_encoded_data(encodedData, encodedDataSize);
+}
+
+NeoAEAArchive neo_aea_with_path(const char *path) {
     NEO_AA_NullParamAssert(path);
     if (strlen(path) > 1024) {
         NEO_AA_LogError("path should not exceed 1024 characters\n");
@@ -714,12 +722,16 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
         return 0;
     }
     fclose(fp);
-    NeoAEAArchive aea = neo_aea_archive_with_encoded_data_nocopy(encodedData, encodedDataSize);
+    NeoAEAArchive aea = neo_aea_with_encoded_data_nocopy(encodedData, encodedDataSize);
     if (!aea) {
         free(encodedData);
         return NULL;
     }
     return aea;
+}
+
+NeoAEAArchive neo_aea_archive_with_path(const char *path) {
+    return neo_aea_with_path(path);
 }
 
 // Cluster Decryption Routine
@@ -831,12 +843,12 @@ __attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, u
 }
 
 /*
- * neo_aea_archive_extract_data
+ * neo_aea_extract_data
  *
  * Extracts data from the AEA.
  * This does not validate signing.
  */
-uint8_t *neo_aea_archive_extract_data(
+uint8_t *neo_aea_extract_data(
     NeoAEAArchive aea, 
     size_t *size, 
     EVP_PKEY* recPriv,
@@ -1140,16 +1152,27 @@ end:
     return aeaData;
 }
 
+uint8_t *neo_aea_archive_extract_data(
+    NeoAEAArchive aea, 
+    size_t *size, 
+    EVP_PKEY* recPriv,
+    EVP_PKEY* signaturePub,
+    uint8_t* symmKey, size_t symmKeySize,
+    uint8_t* password, size_t passwordSize
+) {
+    return neo_aea_extract_data(aea, size, recPriv, signaturePub, symmKey, symmKeySize, password, passwordSize);
+}
+
 /*
  * neo_aa_archive_plain_with_neo_aea_archive
  *
  * Gets the NeoAAArchivePlain from the NeoAEAArchive.
  * This does not validate signing. For this, use
- * neo_aa_archive_plain_with_neo_aea_archive_verify
+ * neo_aa_archive_plain_with_neo_aea_verify
  */
 NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
     size_t aarSize;
-    uint8_t *encodedAppleArchive = neo_aea_archive_extract_data(aea, &aarSize, NULL, 0, NULL, 0, NULL, 0);
+    uint8_t *encodedAppleArchive = neo_aea_extract_data(aea, &aarSize, NULL, 0, NULL, 0, NULL, 0);
     if (encodedAppleArchive) {
         NEO_AA_LogError("could not extract data from aea\n");
         return 0;
@@ -1157,12 +1180,16 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
     return neo_aa_archive_plain_create_with_encoded_data(aarSize, encodedAppleArchive);
 }
 
-uint32_t neo_aea_archive_profile(NeoAEAArchive aea) {
+uint32_t neo_aea_profile(NeoAEAArchive aea) {
     NEO_AA_NullParamAssert(aea);
     return aea->profileID;
 }
 
-uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
+uint32_t neo_aea_archive_profile(NeoAEAArchive aea) {
+    return neo_aea_profile(aea);
+}
+
+uint8_t *neo_aea_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
     NEO_AA_NullParamAssert(aea);
     if (authDataSize) {
         *authDataSize = aea->authDataSize;
@@ -1170,7 +1197,11 @@ uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
     return aea->authData;
 }
 
-void neo_aea_archive_destroy(NeoAEAArchive aea) {
+uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
+    return neo_aea_auth_data(aea, authDataSize);
+}
+
+void neo_aea_destroy(NeoAEAArchive aea) {
     NEO_AA_NullParamAssert(aea);
     if (aea->authData) {
         free(aea->authData);
@@ -1206,6 +1237,10 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
     free(aea);
 }
 
+void neo_aea_archive_destroy(NeoAEAArchive aea) {
+    neo_aea_destroy(aea);
+}
+
 /*
  * neo_aea_archive_verify
  *
@@ -1216,7 +1251,7 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
  * TODO: HKDF / HMAC verification not yet done.
  * TODO: Only supports profile 0.
  */
-int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
+int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     NEO_AA_NullParamAssert(aea);
 
     if (aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
@@ -1493,21 +1528,29 @@ int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     return 0;
 }
 
+int neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
+    return neo_aea_verify(aea, publicKey);
+}
+
 /*
- * neo_aa_archive_plain_with_neo_aea_archive_verify
+ * neo_aa_archive_plain_with_neo_aea_verify
  *
  * Verifies the ECDSA-P256 signature, as well as
  * HKDF / HMAC verification. If valid, it will
  * get the NeoAAArchivePlain from the NeoAEAArchive.
  * If you want to extract without validation, use
  * neo_aa_archive_plain_with_neo_aea_archive. If
- * You only want to verify, use neo_aea_archive_verify.
+ * You only want to verify, use neo_aea_verify.
  */
-NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
-    if (neo_aea_archive_verify(aea, publicKey)) {
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
+    if (neo_aea_verify(aea, publicKey)) {
         return neo_aa_archive_plain_with_neo_aea_archive(aea);
     }
     return 0;
+}
+
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive_verify(NeoAEAArchive aea, uint8_t *publicKey) {
+    return neo_aa_archive_plain_with_neo_aea_verify(aea, publicKey);
 }
 
 #endif /* EXCLUDE_AEA_SUPPORT */

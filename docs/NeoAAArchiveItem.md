@@ -2,6 +2,8 @@
 
 NeoAAArchiveItem is a type that is for representing a single item of the Apple Archive, ex one file or one directory. It holds the header as a NeoAAHeader, as well as the encoded blob data and encoded blob data size.
 
+The [short name variant](ShortNameVariants.md) for this type is `NeoArchiveItem`.
+
 | Function      | Notes      |
 | ------------- | ------------- |
 | [neo_aa_archive_item_create_with_header()](func/neo_aa_archive_item_create_with_header.md) | Creates a new NeoAAArchiveItem with the NeoAAHeader for it. |

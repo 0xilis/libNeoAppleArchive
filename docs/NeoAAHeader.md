@@ -3,6 +3,8 @@
 NeoAAHeader is a type that is for representing the header of the Apple Archive. It holds the encoded data for the header, the header size, field keys, their sizes, and their values*.
 (Note: NeoAAHeader does not directly store the value for field blobs as they don't count as being in the header; that is instead reserved to NeoAAArchiveItem, albeit NeoAAHeader will hold the size of the field blob).
 
+The [short name variant](ShortNameVariants.md) for this type is `NeoHeader`.
+
 | Function      | Notes      |
 | ------------- | ------------- |
 | [neo_aa_header_create()](func/neo_aa_header_create.md) | Creates a new, blank NeoAAHeader. |

@@ -2,6 +2,8 @@
 
 NeoAAArchivePlain is a type that is for representing a plain, raw Apple Archive. It holds an item list (array of NeoAAArchiveItem), as well as the item count.
 
+The [short name variant](ShortNameVariants.md) for this type is `NeoArchivePlain`.
+
 | Function      | Notes      |
 | ------------- | ------------- |
 | neo_aa_archive_plain_create_with_items() | Creates a new NeoAAArchivePlain with a copy of the item list (array of NeoAAArchiveItem) and item count. |

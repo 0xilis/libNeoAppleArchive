@@ -1,7 +1,7 @@
 Package: com.0xilis.libneoapplearchive
 Name: libNeoAppleArchive
 Depends: firmware (>= 7.0), openssl
-Version: 0.0.1
+Version: 0.0.2
 Architecture: iphoneos-arm
 Description: Cross-compat Open-Source library for parsing Apple Archive + Apple Encrypted Archive
 Maintainer: Snoolie K

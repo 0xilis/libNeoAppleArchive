@@ -226,6 +226,25 @@ struct aea_profile0_post_authData {
     struct aea_preroot_header prerootHeader;
 };
 
+NeoAEAArchive neo_aea_with_path(const char *path);
+NeoAEAArchive neo_aea_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
+NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);
+uint8_t *neo_aea_extract_data(
+    NeoAEAArchive aea, 
+    size_t *size, 
+    EVP_PKEY* recPriv,
+    EVP_PKEY* signaturePub,
+    uint8_t* symmKey, size_t symmKeySize,
+    uint8_t* password, size_t passwordSize
+);
+NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea);
+uint32_t neo_aea_profile(NeoAEAArchive aea);
+uint8_t *neo_aea_auth_data(NeoAEAArchive aea, uint32_t *authDataSize);
+void neo_aea_destroy(NeoAEAArchive aea);
+int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey);
+
+/* Legacy long function names */
+
 NeoAEAArchive neo_aea_archive_with_path(const char *path);
 NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize);
 NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize);

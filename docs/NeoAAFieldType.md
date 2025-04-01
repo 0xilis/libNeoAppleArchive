@@ -2,6 +2,8 @@
 
 NeoAAFieldType is a type that represents the type of a field key. The values correspond to ones defined in libAppleArchive's headers.
 
+The [short name variant](ShortNameVariants.md) for this type is `NeoFieldType`.
+
 | Name      | Value      |
 | ------------- | ------------- |
 | NEO_AA_FIELD_TYPE_FLAG | 0 |
