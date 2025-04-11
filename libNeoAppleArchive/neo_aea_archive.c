@@ -414,7 +414,7 @@ __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
     return out;
 }
 
-__attribute__((visibility ("hidden"))) void* main_key(
+__attribute__((visibility ("hidden"))) static void *main_key(
     NeoAEAArchive aea, 
     EVP_PKEY* senderPub, EVP_PKEY* recPriv, EVP_PKEY* sigPub, 
     uint8_t* symmKey, size_t symmKeySize
