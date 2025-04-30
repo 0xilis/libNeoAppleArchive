@@ -64,7 +64,7 @@ void DumpHex(const void* data, size_t size) {
 }
 #endif
 
-__attribute__((visibility ("hidden"))) int alloc_memcpy(void** dst, void* src, size_t n) {
+NEO_INTERNAL_API int alloc_memcpy(void** dst, void* src, size_t n) {
     *dst = malloc(n);
     if (!*dst) {
         return 0;
@@ -73,7 +73,7 @@ __attribute__((visibility ("hidden"))) int alloc_memcpy(void** dst, void* src, s
     return 1;
 }
 
-__attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len) {
+NEO_INTERNAL_API static void *hmac_derive(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len) {
     uint8_t *hmac = malloc(HMacSHA256Size);
     if (!hmac) {
         NEO_AA_ErrorHeapAlloc();
@@ -156,7 +156,7 @@ __attribute__((visibility ("hidden"))) static void *hmac_derive(void *hkdf_key, 
     return hmac;
 }
 
-__attribute__((visibility ("hidden"))) static int hmac_verify(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len, uint8_t *hmac) {
+NEO_INTERNAL_API static int hmac_verify(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len, uint8_t *hmac) {
     void *hmac2 = hmac_derive(hkdf_key, data1, data1Len, data2, data2Len);
     if (!hmac) {
         return -1;
@@ -174,7 +174,7 @@ __attribute__((visibility ("hidden"))) static int hmac_verify(void *hkdf_key, vo
     return isInvalid;
 }
 
-__attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_t contextLen, void *key, size_t outSize) {
+NEO_INTERNAL_API static void *do_hkdf(void *context, size_t contextLen, void *key, size_t outSize) {
     void *derivedKey = malloc(outSize);
     if (!derivedKey) {
         return NULL;
@@ -211,7 +211,7 @@ __attribute__((visibility ("hidden"))) static void *do_hkdf(void *context, size_
 }
 
 /* Helper function to perform HKDF using OpenSSL */
-__attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper(
+NEO_INTERNAL_API static int hkdf_extract_and_expand_helper(
     const uint8_t *salt, size_t salt_len,
     const uint8_t *key, size_t key_len,
     const uint8_t *info, size_t info_len,
@@ -270,7 +270,7 @@ __attribute__((visibility ("hidden"))) static int hkdf_extract_and_expand_helper
     return 1;
 }
 
-__attribute__((visibility ("hidden"))) int get_encoded_size(EVP_PKEY* pkey) {
+NEO_INTERNAL_API static int get_encoded_size(EVP_PKEY* pkey) {
     if (!pkey) {
         return 0;
     }
@@ -295,7 +295,7 @@ __attribute__((visibility ("hidden"))) int get_encoded_size(EVP_PKEY* pkey) {
     return used;
 }
 
-__attribute__((visibility ("hidden"))) int serialize_pubkey(EVP_PKEY* pkey, uint8_t* buf, size_t len) {
+NEO_INTERNAL_API static int serialize_pubkey(EVP_PKEY* pkey, uint8_t* buf, size_t len) {
     if (!pkey) {
         return 0;
     }
@@ -320,26 +320,7 @@ __attribute__((visibility ("hidden"))) int serialize_pubkey(EVP_PKEY* pkey, uint
     return used;
 }
 
-__attribute__((visibility ("hidden"))) uint8_t* calculate_hmac(
-    uint8_t* key,
-    uint8_t* data, size_t dataSize,
-    uint8_t* salt, size_t saltSize
-) {
-    size_t bufSize = saltSize + dataSize + sizeof(uint64_t);
-    uint8_t* buf = malloc(bufSize);
-    if (!buf) {
-        NEO_AA_ErrorHeapAlloc();
-        return NULL;
-    }
-    memcpy(buf, salt, saltSize);
-    memcpy(&buf[saltSize], data, dataSize);
-    memcpy(&buf[saltSize + dataSize], &saltSize, sizeof(uint64_t));
-    void* hmac = hmac_derive(key, buf, bufSize, NULL, 0);
-    free(buf);
-    return hmac;
-}
-
-__attribute__((visibility ("hidden"))) uint8_t* decrypt_AES_256_CTR(uint8_t* key, uint8_t* data, size_t dataSize) {
+NEO_INTERNAL_API static uint8_t *decrypt_AES_256_CTR(uint8_t* key, uint8_t* data, size_t dataSize) {
     const EVP_CIPHER* cipher = EVP_aes_256_ctr();
     uint8_t* decrypted = malloc(dataSize);
     if (!decrypted) {
@@ -371,7 +352,7 @@ __attribute__((visibility ("hidden"))) uint8_t* decrypt_AES_256_CTR(uint8_t* key
     return decrypted;
 }
 
-__attribute__((visibility ("hidden"))) uint8_t* get_password_key(
+NEO_INTERNAL_API static uint8_t *get_password_key(
     uint8_t* password, size_t passwordLen, 
     uint8_t* salt, size_t saltLen,
     uint64_t hardness
@@ -414,7 +395,7 @@ __attribute__((visibility ("hidden"))) uint8_t* get_password_key(
     return out;
 }
 
-__attribute__((visibility ("hidden"))) static void *main_key(
+NEO_INTERNAL_API static void *main_key(
     NeoAEAArchive aea, 
     EVP_PKEY* senderPub, EVP_PKEY* recPriv, EVP_PKEY* sigPub, 
     uint8_t* symmKey, size_t symmKeySize
@@ -471,40 +452,33 @@ __attribute__((visibility ("hidden"))) static void *main_key(
     return mainKey;
 }
 
-__attribute__((visibility ("hidden"))) void* password_key(uint8_t* mainKey, size_t keySize) {
+NEO_INTERNAL_API static void *password_key(uint8_t* mainKey, size_t keySize) {
     return do_hkdf(SCRYPT_KEY_INFO, 10, mainKey, keySize);
 }
 
-__attribute__((visibility ("hidden"))) void* signature_encryption_key(uint8_t* mainKey, size_t keySize) {
-    void* derivationKey = do_hkdf(SIGNATURE_ENCRYPTION_DERIVATION_KEY_INFO, 7, mainKey, 32);
-    void* res = do_hkdf(SIGNATURE_ENCRYPTION_KEY_INFO, 8, derivationKey, keySize);
-    free(derivationKey);
-    return res;
-}
-
-__attribute__((visibility ("hidden"))) void* root_header_key(uint8_t* mainKey, size_t keySize) {
+NEO_INTERNAL_API static void *root_header_key(uint8_t* mainKey, size_t keySize) {
     return do_hkdf(ROOT_HEADER_ENCRYPTED_KEY_INFO, 8, mainKey, keySize);
 }
 
-__attribute__((visibility ("hidden"))) void* cluster_key(uint8_t* mainKey, int idx) {
+NEO_INTERNAL_API void *cluster_key(uint8_t* mainKey, int idx) {
     char context[10];
     strcpy(context, CLUSTER_KEY_INFO);
     *(int *)&context[6] = idx;
     return do_hkdf(context, 10, mainKey, 32);
 }
 
-__attribute__((visibility ("hidden"))) void* cluster_header_key(uint8_t* clusterKey, size_t keySize) {
+NEO_INTERNAL_API void *cluster_header_key(uint8_t* clusterKey, size_t keySize) {
     return do_hkdf(CLUSTER_KEY_MATERIAL_INFO, 8, clusterKey, keySize);
 }
 
-__attribute__((visibility ("hidden"))) void* segment_key(uint8_t* clusterKey, int idx, size_t keySize) {
+NEO_INTERNAL_API void *segment_key(uint8_t* clusterKey, int idx, size_t keySize) {
     char context[10];
     strcpy(context, SEGMENT_KEY_INFO);
     *(int *)&context[6] = idx;
     return do_hkdf(context, 10, clusterKey, keySize);
 }
 
-__attribute__((visibility ("hidden"))) struct aea_segment_header new_partial_segment(uint8_t* decryptedSegment, int checksumAlgorithm) {
+NEO_INTERNAL_API struct aea_segment_header new_partial_segment(uint8_t* decryptedSegment, int checksumAlgorithm) {
     size_t checksumSize = checksumSizes[checksumAlgorithm];
     struct aea_old_segment_header* tmp = (struct aea_old_segment_header*)decryptedSegment;
     struct aea_segment_header segment = {
@@ -527,7 +501,7 @@ __attribute__((visibility ("hidden"))) struct aea_segment_header new_partial_seg
     return segment;
 }
 
-__attribute__((visibility ("hidden"))) struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, uint8_t* segmentMACs, int numSegments, int checksumAlgorithm) {
+NEO_INTERNAL_API struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, uint8_t* segmentMACs, int numSegments, int checksumAlgorithm) {
     struct aea_cluster_header cluster = (struct aea_cluster_header){0},
         errorCluster = cluster;
     size_t segmentHeaderSize = checksumSizes[checksumAlgorithm] + 8;
@@ -742,7 +716,7 @@ NeoAEAArchive neo_aea_archive_with_path(const char *path) {
     Parallelization of decryption is possible given segment sizes
         are precomputed beforehand.
 */
-__attribute__((visibility ("hidden"))) int decrypt_clusters(NeoAEAArchive aea, uint8_t* mainKey, struct aea_root_header* rootHeader, size_t segmentHeaderSize) {
+NEO_INTERNAL_API int decrypt_clusters(NeoAEAArchive aea, uint8_t* mainKey, struct aea_root_header* rootHeader, size_t segmentHeaderSize) {
     uint8_t* encryptedClusters = aea->encryptedClusters;
     size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
     size_t off = 0, 
