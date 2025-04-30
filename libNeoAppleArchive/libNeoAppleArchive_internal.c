@@ -13,9 +13,7 @@ NEO_INTERNAL_API uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
     return ((num>>24)&0xff) | ((num<<8)&0xff0000) | ((num>>8)&0xff00) | ((num<<24)&0xff000000);
 }
 
-size_t lastLoadedBinarySize_internal_do_not_use = 0;
-
-NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath) {
+NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath, size_t *binarySize) {
     /* load binary into memory */
     FILE *fp = fopen(binaryPath,"rb");
     if (!fp) {
@@ -23,18 +21,20 @@ NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath) 
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
-    size_t binarySize = ftell(fp);
+    size_t _binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    lastLoadedBinarySize_internal_do_not_use = binarySize;
-    char *aeaShortcutArchive = malloc(binarySize);
-    size_t bytesRead = fread(aeaShortcutArchive, binarySize, 1, fp);
+    char *binary = malloc(_binarySize);
+    size_t bytesRead = fread(binary, _binarySize, 1, fp);
     fclose(fp);
-    if (bytesRead < binarySize) {
-        free(aeaShortcutArchive);
+    if (bytesRead < _binarySize) {
+        free(binary);
         NEO_AA_LogError("failed to read the entire file.\n");
         return NULL;
     }
-    return aeaShortcutArchive;
+    if (binarySize) {
+        *binarySize = _binarySize;
+    }
+    return binary;
 }
 
 

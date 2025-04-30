@@ -25,7 +25,8 @@ void neo_aa_extract_aar_buffer_to_path(uint8_t *appleArchive, size_t appleArchiv
 void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath) {
     /* TODO: Redo this entire function. This and the one above it are by far the worst coded functions in this whole library. */
     char *oldWorkingDir = getcwd(NULL, 0);
-    uint8_t *appleArchive = (uint8_t *)internal_do_not_call_load_binary(archivePath);
+    size_t appleArchiveSize = 0;
+    uint8_t *appleArchive = (uint8_t *)internal_do_not_call_load_binary(archivePath, &appleArchiveSize);
     /* dirty ugly hack */
     uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
     uint32_t headerMagic = dirtyUglyHack[0];
@@ -33,7 +34,6 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         NEO_AA_LogError("magic not AA01/YAA1.\n");
         return;
     }
-    size_t appleArchiveSize = lastLoadedBinarySize_internal_do_not_use;
     uint8_t *currentHeader = appleArchive;
     int extracting = 1;
     char *slashEndOfPath = internal_do_not_call_memrchr((char *)outputPath, '/', strlen(outputPath));
