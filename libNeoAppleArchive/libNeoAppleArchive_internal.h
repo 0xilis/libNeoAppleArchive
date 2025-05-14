@@ -19,12 +19,7 @@ extern "C" {
 uint32_t internal_do_not_call_flip_edian_32(uint32_t num);
 #define FLIP_32(x) internal_do_not_call_flip_edian_32(x)
 
-#define NEO_AA_NullParamAssert(x, retVal) do { \
-    if (!(x)) { \
-        fprintf(stderr, "%s: null parameter '%s'\n", __func__, #x); \
-        retVal; \
-    } \
-} while(0)
+#define NEO_AA_NullParamAssert(x) if (!x) {fprintf(stderr,"%s: invalid parameters.\n",__FUNCTION__);exit(1);};
 
 #define NEO_AA_LogError(msg) fprintf(stderr, "%s: %s", __FUNCTION__, msg);
 /* Logs to stderr. printf-like. */
@@ -48,8 +43,6 @@ int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dst
 #define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
 #define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */
 #define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
-
-#define NEO_AA_VOID_RETURN return
 
 #define NEO_INTERNAL_API __attribute__((visibility ("hidden"))) 
 
