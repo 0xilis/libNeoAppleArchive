@@ -1388,7 +1388,7 @@ int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     /* Derive key using OpenSSL HKDF */
     uint8_t mainKey[32];
     if (!hkdf_extract_and_expand_helper(salt, 32, keyDerivationKey, keyDerivationKeySize, context, sizeof(context), mainKey, 32)) {
-        fprintf(stderr, "HKDF derivation failed\n");
+        NEO_AA_LogError("HKDF derivation failed\n");
         return -1;
     }
 

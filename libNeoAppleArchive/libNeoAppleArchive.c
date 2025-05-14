@@ -56,35 +56,35 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         headerMagic = dirtyUglyHack[0];
         if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
             free(appleArchive);
-            NEO_AA_LogError("neo_aa_extract_aar_to_path: magic not AA01/YAA1.\n");
+            NEO_AA_LogError("magic not AA01/YAA1.\n");
             return;
         }
         uint16_t headerSize = (dirtyUglyHack[1] & 0xffff);
         NeoAAHeader header = neo_aa_header_create_with_encoded_data(headerSize, currentHeader);
         if (!header) {
             free(appleArchive);
-            fprintf(stderr, "neo_aa_extract_aar_to_path: header creation fail\n");
+            NEO_AA_LogError("header creation fail\n");
             return;
         }
         uint32_t typKey = NEO_AA_FIELD_C("TYP");
         int typIndex = neo_aa_header_get_field_key_index(header, typKey);
         if (typIndex == -1) {
             free(appleArchive);
-            fprintf(stderr, "neo_aa_extract_aar_to_path: no TYP field\n");
+            NEO_AA_LogError("no TYP field\n");
             return;
         }
         uint32_t patKey = NEO_AA_FIELD_C("PAT");
         int patIndex = neo_aa_header_get_field_key_index(header, patKey);
         if (patIndex == -1) {
             free(appleArchive);
-            fprintf(stderr, "neo_aa_extract_aar_to_path: no PAT field\n");
+            NEO_AA_LogError("no PAT field\n");
             return;
         }
         uint32_t modKey = NEO_AA_FIELD_C("MOD");
         int modIndex = neo_aa_header_get_field_key_index(header, modKey);
         if (modIndex == -1) {
             free(appleArchive);
-            fprintf(stderr, "neo_aa_extract_aar_to_path: no MOD field\n");
+            NEO_AA_LogError("no MOD field\n");
             return;
         }
         uint32_t uidKey = NEO_AA_FIELD_C("UID");
@@ -141,7 +141,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             if (datIndex == -1) {
                 free(pathName);
                 free(appleArchive);
-                fprintf(stderr, "neo_aa_extract_aar_to_path: no DAT field\n");
+                NEO_AA_LogError("no DAT field\n");
                 return;
             }
             uint64_t dataSize = neo_aa_header_get_field_key_uint(header, datIndex);
@@ -150,13 +150,13 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             if (dataSize > endOfFile) {
                 free(pathName);
                 free(appleArchive);
-                fprintf(stderr, "neo_aa_extract_aar_to_path: dataSize overflow\n");
+                NEO_AA_LogError("dataSize overflow\n");
                 return;
             }
             FILE *fp = fopen(pathName, "w+");
             if (!fp) {
                 free(appleArchive);
-                fprintf(stderr, "neo_aa_extract_aar_to_path: could not open pathName: %s\n",pathName);
+                NEO_AA_LogErrorF("could not open pathName: %s\n",pathName);
                 free(pathName);
                 return;
             }
@@ -194,7 +194,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         } else {
             free(pathName);
             free(appleArchive);
-            fprintf(stderr, "neo_aa_extract_aar_to_path: AAEntryType %c not supported yet, only D and F currently are\n",typEntryType);
+            NEO_AA_LogErrorF("AAEntryType %c not supported yet, only D and F currently are\n",typEntryType);
             return;
         }
         free(pathName);

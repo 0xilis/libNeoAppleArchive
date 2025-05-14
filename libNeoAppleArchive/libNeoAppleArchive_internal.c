@@ -17,7 +17,7 @@ NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath, 
     /* load binary into memory */
     FILE *fp = fopen(binaryPath,"rb");
     if (!fp) {
-        fprintf(stderr,"libNeoAppleArchive: failed to find path\n");
+        NEO_AA_LogError("failed to find path\n");
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
@@ -58,7 +58,7 @@ NEO_INTERNAL_API void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob,
         if ((blobPosition + xatItemSize) > blobSize) {
             /* I'm not sure if libAppleArchive itself does this, but rather than erroring we attempt to fix it. */
             /* Some problems may arrive if XAT blob is over 4GB but that will probably never happen. */
-            fprintf(stderr, "libNeoAppleArchive: xatItemSize (%d) reaches past size of XAT blob (%zu). Setting item size to blobSize and hoping for the best...\n",xatItemSize,blobSize);
+            NEO_AA_LogErrorF("libNeoAppleArchive: xatItemSize (%d) reaches past size of XAT blob (%zu). Setting item size to blobSize and hoping for the best...\n",xatItemSize,blobSize);
             xatItemSize = (uint32_t)blobSize - blobPosition;
         }
         const char *xattrName = (const char *)currentXAT + 4;
@@ -66,7 +66,7 @@ NEO_INTERNAL_API void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob,
         size_t xattrNameLen = strnlen(xattrName, xatItemSize - 4);
         if (xatItemSize < (4 + xattrNameLen + 1)) {
             /* Name + null byte reaches past xatItemSize, error :( */
-            fprintf(stderr, "libNeoAppleArchive: (%lu) reaches past xatItemSize (%d).\n",(4 + xattrNameLen + 1), xatItemSize);
+            NEO_AA_LogErrorF("(%lu) reaches past xatItemSize (%d).\n",(4 + xattrNameLen + 1), xatItemSize);
             return;
         }
         void *xattrValue = (void *)(xattrName + xattrNameLen + 1);

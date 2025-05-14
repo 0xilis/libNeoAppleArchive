@@ -28,8 +28,6 @@ uint32_t internal_do_not_call_flip_edian_32(uint32_t num);
 #define NEO_AA_UnsupportedKey(key) NEO_AA_LogErrorF("Unsupported field key for libNeoAppleArchive: %s\n",key)
 #define NEO_AA_AssertUnsupportedKey(key, unsupported) if (key == NEO_AA_FIELD_C(unsupported)) {NEO_AA_UnsupportedKey(unsupported);exit(1);};
 #define NEO_AA_ErrorHeapAlloc() NEO_AA_LogError("libNeoAppleArchive failed to malloc/realloc\n")
-#define NEO_AA_AssertHeapAlloc(x) if (!x) {NEO_AA_LogError("libNeoAppleArchive failed to malloc/realloc\n");exit(1);}
-#define NEO_AA_ErrorHSP() NEO_AA_LogError("heap overflow detected\n")
 
 extern size_t lastLoadedBinarySize_internal_do_not_use;
 char *internal_do_not_call_load_binary(const char *binaryPath, size_t *binarySize);

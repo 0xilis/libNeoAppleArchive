@@ -12,7 +12,7 @@
 NeoAAHeader neo_aa_header_create(void) {
     NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
     if (!header) {
-        fprintf(stderr,"neo_aa_header_create: malloc\n");
+        NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
     memset(header, 0, sizeof(struct neo_aa_header_impl));
@@ -87,20 +87,20 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
     uint32_t *dumbHack = *(uint32_t **)&data;
     uint32_t headerMagic = dumbHack[0];
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
-        fprintf(stderr,"neo_aa_header_create_with_encoded_data: data is not raw header (compression not yet supported)\n");
+        NEO_AA_LogError("data is not raw header\n");
         return NULL;
     }
     if ((dumbHack[1] & 0xffff) != encodedSize) {
-        fprintf(stderr,"neo_aa_header_create_with_encoded_data: encodedSize mismatch\n");
+        NEO_AA_LogError("encodedSize mismatch\n");
         return NULL;
     }
     if (encodedSize < 6) {
-        fprintf(stderr,"neo_aa_header_create_with_encoded_data: encodedSize too small\n");
+        NEO_AA_LogError("encodedSize too small\n");
         return NULL;
     }
     NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
     if (!header) {
-        fprintf(stderr,"neo_aa_header_create_with_encoded_data: malloc\n");
+        NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
     char *headerData = malloc(encodedSize);
@@ -243,7 +243,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 }
                 free(fieldKeyValues);
                 free(header);
-                fprintf(stderr, "neo_aa_header_create_with_encoded_data: invalid field subtype (%x)\n",fieldKeyPlusSubtype);
+                NEO_AA_LogErrorF(stderr, "invalid field subtype (%x)\n",fieldKeyPlusSubtype);
                 return NULL;
         }
         
