@@ -96,6 +96,10 @@ NEO_INTERNAL_API void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob,
 
 NEO_INTERNAL_API void internal_do_not_call_is_field_key_available(uint32_t key) {
     /* These blobs have not yet been implemented */
+    /*
+     * TODO: This is bad. The library should not close the caller!
+     * Instead, it should just return error. Do this later.
+     */
     NEO_AA_AssertUnsupportedKey(key, "ACL");
     NEO_AA_AssertUnsupportedKey(key, "YAF");
 }

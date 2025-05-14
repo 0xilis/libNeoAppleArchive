@@ -1003,6 +1003,10 @@ NEO_INTERNAL_API static int add_directory_contents_to_archive(const char *dirPat
     return 0;
 }
 
+/*
+ * TODO: Needs more support for more types,
+ * ex. aar with a socket
+ */
 NeoAAArchivePlain neo_aa_archive_plain_from_directory(const char *dirPath) {
     size_t itemsCount = 0;
     size_t itemsMalloc = 100;

@@ -18,7 +18,7 @@
  * Please have sig be 64 bytes.
  */
 unsigned int ecdsa_p256_signature_asn1_len(uint8_t *prologueSignature, size_t maxSize) {
-    if (!prologueSignature || !maxSize) {
+    if (!prologueSignature) {
         return 0;
     }
     if (prologueSignature[0] != 0x30) {
