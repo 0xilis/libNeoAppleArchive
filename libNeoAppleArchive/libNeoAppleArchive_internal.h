@@ -1,5 +1,5 @@
 /*
- *  neo_aa_header.h
+ *  libNeoAppleArchive_internal.h
  *  libNeoAppleArchive
  *
  *  Created by Snoolie Keffaber on 2024/04/24.
@@ -50,4 +50,4 @@ int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dst
 }
 #endif
 
-#endif /* neo_aa_header_h */
+#endif /* libNeoAppleArchive_internal_h */
