@@ -210,7 +210,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
 }
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
-    NEO_AA_NullParamAssert(header);
+    NEO_AA_NullParamAssert(header, return NULL);
     NeoAAArchiveItem archiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
     if (!archiveItem) {
         NEO_AA_ErrorHeapAlloc();
@@ -241,9 +241,9 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_header_copy(NeoAAHeader header)
 }
 
 void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t dataSize) {
-    NEO_AA_NullParamAssert(item);
-    NEO_AA_NullParamAssert(data);
-    NEO_AA_NullParamAssert(dataSize);
+    NEO_AA_NullParamAssert(item, return);
+    NEO_AA_NullParamAssert(data, return);
+    NEO_AA_NullParamAssert(dataSize, return);
     char *encodedBlobData = item->encodedBlobData;
     if (encodedBlobData) {
         /* Zero out item->encodedBlobData BEFORE we free it to prevent weird UaF race threading issues */
@@ -259,8 +259,8 @@ void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t
 }
 
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items_nocopy(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
-    NEO_AA_NullParamAssert(itemCount);
+    NEO_AA_NullParamAssert(items, return NULL);
+    NEO_AA_NullParamAssert(itemCount, return NULL);
     NeoAAArchivePlain plainArchive = malloc(sizeof(struct neo_aa_archive_plain_impl));
     if (!plainArchive) {
         NEO_AA_ErrorHeapAlloc();
@@ -272,8 +272,8 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items_nocopy(NeoAAArchiveItem
 }
 
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
-    NEO_AA_NullParamAssert(itemCount);
+    NEO_AA_NullParamAssert(items, return NULL);
+    NEO_AA_NullParamAssert(itemCount, return NULL);
     NeoAAArchiveItem *copiedItems = malloc(sizeof(NeoAAArchiveItem) * itemCount);
     if (!copiedItems) {
         NEO_AA_ErrorHeapAlloc();
@@ -320,7 +320,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
 }
 
 void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
+    NEO_AA_NullParamAssert(items, return);
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem archiveItem = items[i];
         items[i] = 0;
@@ -337,7 +337,7 @@ void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount) {
 }
 
 void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive) {
-    NEO_AA_NullParamAssert(plainArchive);
+    NEO_AA_NullParamAssert(plainArchive, return);
     NeoAAArchiveItem *items = plainArchive->items;
     int itemCount = plainArchive->itemCount;
     plainArchive->items = 0;
@@ -347,7 +347,7 @@ void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive) {
 }
 
 void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
+    NEO_AA_NullParamAssert(items, return);
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem archiveItem = items[i];
         neo_aa_header_destroy_nozero(archiveItem->header);
@@ -358,7 +358,7 @@ void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCo
 }
 
 void neo_aa_archive_plain_destroy_nozero(NeoAAArchivePlain plainArchive) {
-    NEO_AA_NullParamAssert(plainArchive);
+    NEO_AA_NullParamAssert(plainArchive, return);
     neo_aa_archive_item_list_destroy(plainArchive->items, plainArchive->itemCount);
     free(plainArchive);
 }
@@ -400,7 +400,7 @@ void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer) {
 }
 
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
-    NEO_AA_NullParamAssert(plainArchive);
+    NEO_AA_NullParamAssert(plainArchive, return);
     /* Ugly slow */
     size_t archiveSize = neo_aa_archive_plain_outfile_size(plainArchive);
     if (!archiveSize) {
@@ -427,7 +427,7 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
 }
 
 uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize) {
-    NEO_AA_NullParamAssert(archive);
+    NEO_AA_NullParamAssert(archive, return NULL);
     /* Ugly slow */
     size_t archiveSize = neo_aa_archive_plain_outfile_size(archive);
     if (!archiveSize) {
@@ -462,8 +462,8 @@ uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t
 }
 
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath) {
-    NEO_AA_NullParamAssert(plainArchive);
-    NEO_AA_NullParamAssert(filepath);
+    NEO_AA_NullParamAssert(plainArchive, return);
+    NEO_AA_NullParamAssert(filepath, return);
     FILE *fp = fopen(filepath, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
@@ -561,7 +561,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
 }
 
 NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
-    NEO_AA_NullParamAssert(path);
+    NEO_AA_NullParamAssert(path, return NULL);
     FILE *fp = fopen(path, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
@@ -727,7 +727,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
  * supports ZLIB/LZFSE/RAW at the moment.
  */
 NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
-    NEO_AA_NullParamAssert(path);
+    NEO_AA_NullParamAssert(path, return NULL);
     FILE *fp = fopen(path, "rb");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
@@ -820,8 +820,8 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
 }
 
 void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algorithm, const char *path) {
-    NEO_AA_NullParamAssert(plain);
-    NEO_AA_NullParamAssert(path);
+    NEO_AA_NullParamAssert(plain, return);
+    NEO_AA_NullParamAssert(path, return);
     FILE *fp = fopen(path, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open path\n");

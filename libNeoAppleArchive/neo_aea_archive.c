@@ -532,7 +532,7 @@ NEO_INTERNAL_API struct aea_cluster_header new_partial_cluster(uint8_t* decrypte
 }
 
 NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
-    NEO_AA_NullParamAssert(encodedData);
+    NEO_AA_NullParamAssert(encodedData, return NULL);
     NeoAEAArchive aea = calloc(1, sizeof(struct aea_archive));
     if (!aea) {
         NEO_AA_ErrorHeapAlloc();
@@ -653,11 +653,11 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
 }
 
 NeoAEAArchive neo_aea_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
-    NEO_AA_NullParamAssert(encodedData);
+    NEO_AA_NullParamAssert(encodedData, return NULL);
     uint8_t *encodedDataCopy = malloc(encodedDataSize);
     if (!encodedDataCopy) {
         NEO_AA_ErrorHeapAlloc();
-        return 0;
+        return NULL;
     }
     memcpy(encodedDataCopy, encodedData, encodedDataSize);
     NeoAEAArchive aea = neo_aea_with_encoded_data_nocopy(encodedDataCopy, encodedDataSize);
@@ -673,7 +673,7 @@ NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t enc
 }
 
 NeoAEAArchive neo_aea_with_path(const char *path) {
-    NEO_AA_NullParamAssert(path);
+    NEO_AA_NullParamAssert(path, return NULL);
     if (strlen(path) > 1024) {
         NEO_AA_LogError("path should not exceed 1024 characters\n");
         return 0;
@@ -836,7 +836,7 @@ uint8_t *neo_aea_extract_data(
        * more abstraction to make it easier to understand
        * etc...
      */
-    NEO_AA_NullParamAssert(aea);
+    NEO_AA_NullParamAssert(aea, return NULL);
 
     size_t keySize = aea->profileID == NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256 ? 32 : 80;
     EVP_PKEY* senderPub = NULL;
@@ -1155,7 +1155,7 @@ NeoAAArchivePlain neo_aa_archive_plain_with_neo_aea_archive(NeoAEAArchive aea) {
 }
 
 uint32_t neo_aea_profile(NeoAEAArchive aea) {
-    NEO_AA_NullParamAssert(aea);
+    NEO_AA_NullParamAssert(aea, return UINT32_MAX);
     return aea->profileID;
 }
 
@@ -1164,7 +1164,7 @@ uint32_t neo_aea_archive_profile(NeoAEAArchive aea) {
 }
 
 uint8_t *neo_aea_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
-    NEO_AA_NullParamAssert(aea);
+    NEO_AA_NullParamAssert(aea, return NULL);
     if (authDataSize) {
         *authDataSize = aea->authDataSize;
     }
@@ -1176,7 +1176,7 @@ uint8_t *neo_aea_archive_auth_data(NeoAEAArchive aea, uint32_t *authDataSize) {
 }
 
 void neo_aea_destroy(NeoAEAArchive aea) {
-    NEO_AA_NullParamAssert(aea);
+    NEO_AA_NullParamAssert(aea, return);
     if (aea->authData) {
         free(aea->authData);
     }
@@ -1226,7 +1226,7 @@ void neo_aea_archive_destroy(NeoAEAArchive aea) {
  * TODO: Only supports profile 0.
  */
 int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
-    NEO_AA_NullParamAssert(aea);
+    NEO_AA_NullParamAssert(aea, return -1);
 
     if (aea->profileID != NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256) {
         NEO_AA_LogError("Verification only supported for profile 0 (ECDSA-P256)\n");

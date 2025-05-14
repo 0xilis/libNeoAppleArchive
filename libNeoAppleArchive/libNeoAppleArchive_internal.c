@@ -165,16 +165,16 @@ NEO_INTERNAL_API char internal_do_not_call_neo_aa_header_subtype_for_field_type_
 }
 
 NEO_INTERNAL_API uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index) {
-    NEO_AA_NullParamAssert(header);
-    NEO_AA_NullParamAssert((index >= 0));
+    NEO_AA_NullParamAssert(header, return 0);
+    NEO_AA_NullParamAssert((index >= 0), return 0);
     size_t headerSize = header->headerSize;
     uint32_t fieldCount = header->fieldCount;
-    NEO_AA_NullParamAssert(fieldCount);
+    NEO_AA_NullParamAssert(fieldCount, return 0);
     if (!index) {
         /* Index is 0; this is the first field key */
         return 6;
     }
-    NEO_AA_NullParamAssert((index < (int)fieldCount));
+    NEO_AA_NullParamAssert((index < (int)fieldCount), return 0);
     size_t currentPos = 6;
     for (int i = 0; i < index; i++) {
         if (currentPos >= headerSize) {
