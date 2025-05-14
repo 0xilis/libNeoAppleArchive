@@ -243,7 +243,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 }
                 free(fieldKeyValues);
                 free(header);
-                NEO_AA_LogErrorF(stderr, "invalid field subtype (%x)\n",fieldKeyPlusSubtype);
+                NEO_AA_LogErrorF("invalid field subtype (%x)\n",fieldKeyPlusSubtype);
                 return NULL;
         }
         
