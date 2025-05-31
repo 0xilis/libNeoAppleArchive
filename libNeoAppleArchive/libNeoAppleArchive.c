@@ -15,6 +15,7 @@
 #include <zlib.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <libgen.h>
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     NEO_AA_NullParamAssert(header);
@@ -928,11 +929,80 @@ NEO_INTERNAL_API static int add_directory_contents_to_archive(const char *dirPat
     return 0;
 }
 
+NEO_INTERNAL_API static NeoAAArchivePlain internal_do_not_call_wrap_file_in_neo_aa(const char *inputPath) {
+    NeoAAHeader header = neo_aa_header_create();
+    if (!header) {
+        NEO_AA_LogError("Failed to create header\n");
+        return NULL;
+    }
+    char *fileName = basename((char *)inputPath);
+    /* Declare our file as, well, a file */
+    neo_aa_header_set_field_uint(header, NEO_AA_FIELD_C("TYP"), 1, 'F');
+    /* Declare our PAT to be our file name */
+    neo_aa_header_set_field_string(header, NEO_AA_FIELD_C("PAT"), strlen(fileName), fileName);
+    /* Crete the NeoAAArchiveItem item */
+    NeoAAArchiveItem item = neo_aa_archive_item_create_with_header(header);
+    if (!item) {
+        neo_aa_header_destroy_nozero(header);
+        NEO_AA_LogError("Failed to create item\n");
+        return NULL;
+    }
+    FILE *fp = fopen(inputPath, "r");
+    if (!fp) {
+        neo_aa_archive_item_destroy_nozero(item);
+        NEO_AA_LogError("Failed to open input path\n");
+        return NULL;
+    }
+    fseek(fp, 0, SEEK_END);
+    size_t binarySize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    /* allocate our uncompressed data */
+    uint8_t *data = malloc(binarySize);
+    if (!data) {
+        fclose(fp);
+        neo_aa_archive_item_destroy_nozero(item);
+        NEO_AA_LogError("Not enough memory to allocate file into memory\n");
+        return NULL;
+    }
+    size_t bytesRead = fread(data, 1, binarySize, fp);
+    fclose(fp);
+    if (bytesRead < binarySize) {
+        neo_aa_archive_item_destroy_nozero(item);
+        NEO_AA_LogError("Failed to read the entire file\n");
+        return NULL;
+    }
+    
+    /* Handle other than RAW later */
+    neo_aa_header_set_field_blob(header, NEO_AA_FIELD_C("DAT"), 0, binarySize);
+    neo_aa_archive_item_add_blob_data(item, (char *)data, binarySize);
+    free(data);
+    NeoAAArchiveItem *itemList = &item;
+    NeoAAArchivePlain archive = neo_aa_archive_plain_create_with_items_nocopy(itemList, 1);
+    if (!archive) {
+        NEO_AA_LogError("Failed to create NeoAAArchivePlain\n");
+        return NULL;
+    }
+    return archive;
+}
+
 /*
  * TODO: Needs more support for more types,
  * ex. aar with a socket
  */
 NeoAAArchivePlain neo_aa_archive_plain_from_directory(const char *dirPath) {
+    /* Check if dirPath is a directory path or path to a singular file */
+    struct stat statbuf;
+
+    if (stat(dirPath, &statbuf)) {
+        NEO_AA_LogError("stat() failed for dirPath\n");
+        return NULL;
+    }
+
+    if (S_ISREG(statbuf.st_mode)) {
+        return internal_do_not_call_wrap_file_in_neo_aa(dirPath);
+    }
+    /* Assume dirPath is directory if not regular file */
+
     size_t itemsCount = 0;
     size_t itemsMalloc = 100;
     NeoAAArchiveItemList items = (NeoAAArchiveItemList)malloc(sizeof(NeoAAArchiveItem) * itemsMalloc);
