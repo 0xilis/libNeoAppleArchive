@@ -111,6 +111,7 @@ void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive);
 void neo_aa_archive_plain_destroy_nozero(NeoAAArchivePlain plainArchive);
 void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer);
 uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize);
+int neo_aa_archive_plain_write_buffer(NeoAAArchivePlain plainArchive, uint8_t *buffer);
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd);
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath);
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item);

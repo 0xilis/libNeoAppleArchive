@@ -206,6 +206,24 @@ void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer) {
     }
 }
 
+int neo_aa_archive_plain_write_buffer(NeoAAArchivePlain plainArchive, uint8_t *buffer) {
+    size_t offset = 0;
+    int itemCount = plainArchive->itemCount;
+    NeoAAArchiveItem *items = plainArchive->items;
+    for (int i = 0; i < itemCount; i++) {
+        NeoAAArchiveItem item = items[i];
+        NeoAAHeader header = item->header;
+        if (!header) {
+            NEO_AA_LogError("item does not hold a header\n");
+            return -1;
+        }
+        char *_buffer = (char *)buffer;
+        neo_aa_archive_item_write_to_buffer(item, _buffer + offset);
+        offset += (header->headerSize + item->encodedBlobDataSize);
+    }
+    return 0;
+}
+
 void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
     NEO_AA_NullParamAssert(plainArchive);
     /* Ugly slow */
@@ -215,19 +233,10 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
         return;
     }
     /* Now we know what the archive size will be, create it. */
-    char *buffer = malloc(archiveSize); /* buffer to write to fd */
-    size_t offset = 0;
-    int itemCount = plainArchive->itemCount;
-    NeoAAArchiveItem *items = plainArchive->items;
-    for (int i = 0; i < itemCount; i++) {
-        NeoAAArchiveItem item = items[i];
-        NeoAAHeader header = item->header;
-        if (!header) {
-            NEO_AA_LogError("item does not hold a header\n");
-            return;
-        }
-        neo_aa_archive_item_write_to_buffer(item, buffer + offset);
-        offset += (header->headerSize + item->encodedBlobDataSize);
+    uint8_t *buffer = malloc(archiveSize); /* buffer to write to fd */
+    if (neo_aa_archive_plain_write_buffer(plainArchive, buffer)) {
+        NEO_AA_LogError("neo_aa_archive_plain_write_buffer failed\n");
+        return;
     }
     write(fd, buffer, archiveSize);
     free(buffer);
@@ -414,7 +423,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
  * which handles all compression types of
  * .aar, including uncompressed.
  * Well, it *will*... currently it only
- * supports ZLIB/LZFSE/RAW at the moment.
+ * supports ZLIB/LZFSE/LZBITMAP/RAW at the moment.
  *
  * On succession, returns a NeoAAArchiveGeneric.
  * On fail, returns 0.
@@ -972,8 +981,29 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
     uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
     uint32_t headerMagic = dirtyUglyHack[0];
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
-        NEO_AA_LogError("magic not AA01/YAA1.\n");
-        return;
+        /* May be PBZE, if so uncompress it... */
+        NeoAAArchiveGeneric generic = neo_aa_archive_generic_from_encoded_data(appleArchiveSize, appleArchive);
+        if (!generic) {
+            /* assume NeoAAArchiveGeneric failed because it was not compressed */
+            NEO_AA_LogError("magic not AA01/YAA1.\n");
+            return;
+        }
+        NeoAAArchivePlain raw = generic->raw;
+        free(generic);
+        free(appleArchive);
+        /* Ugly slow */
+        size_t archiveSize = neo_aa_archive_plain_outfile_size(raw);
+        if (!archiveSize) {
+            NEO_AA_LogError("failed to get outfile size\n");
+            return;
+        }
+        /* Now we know what the archive size will be, create it. */
+        appleArchive = malloc(archiveSize); /* buffer to write to fd */
+        if (neo_aa_archive_plain_write_buffer(raw, appleArchive)) {
+            NEO_AA_LogError("neo_aa_archive_plain_write_buffer failed\n");
+            return;
+        }
+        neo_aa_archive_plain_destroy_nozero(raw);
     }
     uint8_t *currentHeader = appleArchive;
     int extracting = 1;
