@@ -134,6 +134,7 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 #define NEO_AA_COMPRESSION_LZFSE 0x801
 #define NEO_AA_COMPRESSION_NONE 0
 #define NEO_AA_COMPRESSION_ZLIB 0x505
+#define NEO_AA_COMPRESSION_LZBITMAP 0x702
 #endif
 
 /* Shortened names */
@@ -143,6 +144,7 @@ __attribute__((used, always_inline)) static uint32_t internal_do_not_call_ez_mak
 #define NEO_COMPRESSION_LZFSE NEO_AA_COMPRESSION_LZFSE
 #define NEO_COMPRESSION_NONE NEO_AA_COMPRESSION_NONE
 #define NEO_COMPRESSION_ZLIB NEO_AA_COMPRESSION_ZLIB
+#define NEO_COMPRESSION_LZBITMAP NEO_AA_COMPRESSION_LZBITMAP
 typedef enum {
     NEO_FIELD_TYPE_FLAG = (uint32_t)0,
     NEO_FIELD_TYPE_UINT = (uint32_t)1,

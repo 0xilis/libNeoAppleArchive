@@ -43,7 +43,9 @@ int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dst
 #define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
 #define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */
 #define PBZ__MAGIC 0x007A6270 /* For compressed Apple Archives */
-#define PBZE_MAGIC 0x657A6270
+#define PBZE_MAGIC 0x657A6270 /* LZFSE */
+#define PBZB_MAGIC 0x627A6270 /* LZBITMAP */
+#define PBZZ_MAGIC 0x7A7A6270 /* ZLIB */
 
 #define NEO_INTERNAL_API __attribute__((visibility ("hidden"))) 
 

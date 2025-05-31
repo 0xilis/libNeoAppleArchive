@@ -11,6 +11,7 @@
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #include <lzfse.h>
 #pragma clang diagnostic pop
+#include <libzbitmap.h>
 #include <zlib.h>
 #include <fcntl.h>
 #include <dirent.h>
@@ -512,6 +513,45 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             genericArchive->uncompressedSize = uncompressedSize;
             genericArchive->compressedSize = compressedSize;
             return genericArchive;
+        } else if (compressionType == 'b') {
+            /* type is LZBIPMAP */
+            /* compressed size of aar is stored at 0x18 in binary */
+            size_t compressedSize = FLIP_32(*((uint32_t *)(data + 0x18)));
+            /* uncompressed size of aar is stored at 0x10 in binary */
+            size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
+            uint8_t *encodedRAWData = malloc(uncompressedSize);
+            if (!encodedRAWData) {
+                NEO_AA_ErrorHeapAlloc();
+                return NULL;
+            }
+
+            size_t decompressedBytes = 0;
+            int failed = zbm_decompress(encodedRAWData, uncompressedSize, data + 0x1C, compressedSize, &decompressedBytes);
+            if (decompressedBytes != uncompressedSize || failed) {
+                free(encodedRAWData);
+                NEO_AA_LogError("failed to decompress LZBITMAP data\n");
+                return NULL;
+            }
+
+            NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
+            free(encodedRAWData);
+            if (!plainArchive) {
+                /* Failed to create plain archive, return NULL. */
+                return NULL;
+            }
+
+            NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
+            if (!genericArchive) {
+                /* Not enough space to create the generic archive. */
+                neo_aa_archive_plain_destroy_nozero(plainArchive);
+                NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
+                return NULL;
+            }
+            genericArchive->raw = plainArchive;
+            genericArchive->compression = NEO_AA_COMPRESSION_LZBITMAP;
+            genericArchive->uncompressedSize = uncompressedSize;
+            genericArchive->compressedSize = compressedSize;
+            return genericArchive;
         } else {
             /* We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry! */
             NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry!\n");
@@ -616,6 +656,38 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         size_t compressedSize = lzfse_encode_buffer(compressed, (archiveSize + 100) - sizeof(struct neo_pbzx_archived_directory_header), (uint8_t *)buffer, archiveSize, 0);
         ptr->compressedSize = FLIP_32((uint32_t)compressedSize);
         free(buffer);
+        write(fd, compressed - sizeof(struct neo_pbzx_archived_directory_header), compressedSize + sizeof(struct neo_pbzx_archived_directory_header));
+        /* Go back to header since this is the pointer malloc gave us */
+        free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
+        return 1;
+    } else if (NEO_AA_COMPRESSION_ZLIB == algorithm) {
+        uint8_t *compressed = malloc(archiveSize + 100);
+        if (!compressed) {
+            NEO_AA_LogError("not enough memory to compress\n");
+            return 0;
+        }
+        memset(compressed, 0, archiveSize + 100);
+
+        struct neo_pbzx_archived_directory_header *ptr = (struct neo_pbzx_archived_directory_header *)compressed;
+        ptr->magic = PBZZ_MAGIC;
+        ptr->mystery = 0x40;
+        ptr->uncompressedSize = FLIP_32((uint32_t)archiveSize);
+
+        /* Skip past header */
+        compressed += sizeof(struct neo_pbzx_archived_directory_header);
+
+        size_t compressedSize = archiveSize + 100 - sizeof(struct neo_pbzx_archived_directory_header);
+        int ret = compress2(compressed, &compressedSize, (const Bytef *)buffer, archiveSize, Z_BEST_COMPRESSION);
+        if (ret != Z_OK) {
+            NEO_AA_LogErrorF("zlib compression failed with error code %d\n", ret);
+            free(buffer);
+            free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
+            return 0;
+        }
+
+        ptr->compressedSize = FLIP_32((uint32_t)compressedSize);
+        free(buffer);
+
         write(fd, compressed - sizeof(struct neo_pbzx_archived_directory_header), compressedSize + sizeof(struct neo_pbzx_archived_directory_header));
         /* Go back to header since this is the pointer malloc gave us */
         free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
