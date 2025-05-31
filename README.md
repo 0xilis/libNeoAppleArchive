@@ -2,7 +2,7 @@
 Cross-compat library for parsing Apple Archive and Apple Encrypted Archive.
 
 ### What isn't finished
-- LZMA/LZ4/LZBITMAP compressed `.aar`s; only `RAW`, `LZFSE`, and `ZLIB` are currently supported
+- LZMA and LZ4 compressed `.aar`s; only `RAW`, `LZFSE`, `LZBITMAP` and `ZLIB` are currently supported
 - Multi-Threadded support
 
 ### What is
@@ -18,10 +18,12 @@ Functions for messing around with headers, extracting, and archiving apple archi
 ### Compatibility
 - Most Darwin Operating Systems (macOS, iOS, watchOS, visionOS etc.) 
 - Linux
-- MinGW for Windows
+- MinGW for Windows (untested on latest, only old builds verified)
 
 # NOTE
 This is not a reimplementation of libAppleArchive, rather its own library, created from the ground up. It is not compatible with libAppleArchive APIs, look at the header and code for clues. There is also docs available at `docs/` for types and functions.
+
+If the end result is compressed under ZLIB ends up having the same compressedSize and uncompressedSize, Apple's official tools will not uncompress it. This is not a libNeoAppleArchive bug but rather a bug with Apple's own implementation and will need to be fixed by them. Extracting under libNeoAppleArchive should work fine.
 
 # Libraries Used
 [liblzfse](https://github.com/lzfse/lzfse) is owned by Apple Inc. It is added as a submodule in `libNeoAppleArchive/compression/lzfse`, and the Makefile builds it into `build/lzfse`.
