@@ -24,11 +24,11 @@ NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath, 
     size_t _binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
     char *binary = malloc(_binarySize);
-    size_t bytesRead = fread(binary, _binarySize, 1, fp);
+    size_t bytesRead = fread(binary, 1, _binarySize, fp);
     fclose(fp);
     if (bytesRead < _binarySize) {
         free(binary);
-        NEO_AA_LogError("failed to read the entire file.\n");
+        NEO_AA_LogErrorF("failed to read the entire file (read %zu bytes, expected %zu).\n",bytesRead,_binarySize);
         return NULL;
     }
     if (binarySize) {
