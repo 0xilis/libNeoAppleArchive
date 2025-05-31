@@ -9,7 +9,7 @@ NeoAEAArchive neo_aea_with_path(const char *path);
 
 #### path
 
-A path containing an Apple Encrypted Archive
+A path containing an Apple Encrypted Archive.
 
 ## Return Value
 
