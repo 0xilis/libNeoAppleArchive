@@ -1092,7 +1092,7 @@ uint8_t *neo_aea_extract_data(
                     curSegmentHeader->segmentData,
                     curSegmentHeader->compressedSize,
                     &unused
-                ) < 0) {
+                )) {
                     NEO_AA_LogError("Failed to decompress LZBITMAP data\n");
                     free(aeaData);
                     return NULL;
