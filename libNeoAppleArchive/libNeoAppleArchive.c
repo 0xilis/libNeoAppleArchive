@@ -1039,24 +1039,42 @@ NeoAAArchivePlain neo_aa_archive_plain_from_directory(const char *dirPath) {
     return NULL;
 }
 
-void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath) {
+int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPath) {
     /* 
      * TODO: Redo this entire function.
      * This is by far the worst coded function in this whole library.
      */
     char *oldWorkingDir = getcwd(NULL, 0);
-    size_t appleArchiveSize = 0;
-    uint8_t *appleArchive = (uint8_t *)internal_do_not_call_load_binary(archivePath, &appleArchiveSize);
-    /* dirty ugly hack */
-    uint32_t *dirtyUglyHack = *(uint32_t **)&appleArchive;
-    uint32_t headerMagic = dirtyUglyHack[0];
+    /* load binary into memory */
+    FILE *fp = fopen(archivePath,"rb");
+    if (!fp) {
+        NEO_AA_LogError("failed to find path\n");
+        return -1;
+    }
+    fseek(fp, 0, SEEK_END);
+    size_t appleArchiveSize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    uint8_t *appleArchive = malloc(appleArchiveSize);
+    if (!appleArchive) {
+        NEO_AA_LogError("failed to load appleArchive into memory\n");
+        return -3;
+    }
+    size_t bytesRead = fread(appleArchive, 1, appleArchiveSize, fp);
+    fclose(fp);
+    if (bytesRead < appleArchiveSize) {
+        free(appleArchive);
+        NEO_AA_LogErrorF("failed to read the entire file (read %zu bytes, expected %zu).\n",bytesRead, appleArchiveSize);
+        return -2;
+    }
+    uint32_t headerMagic;
+    memcpy(&headerMagic, appleArchive, 4);
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
         /* May be PBZE, if so uncompress it... */
         NeoAAArchiveGeneric generic = neo_aa_archive_generic_from_encoded_data(appleArchiveSize, appleArchive);
         if (!generic) {
             /* assume NeoAAArchiveGeneric failed because it was not compressed */
             NEO_AA_LogError("magic not AA01/YAA1.\n");
-            return;
+            return -4;
         }
         NeoAAArchivePlain raw = generic->raw;
         free(generic);
@@ -1065,15 +1083,16 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         size_t archiveSize = neo_aa_archive_plain_outfile_size(raw);
         if (!archiveSize) {
             NEO_AA_LogError("failed to get outfile size\n");
-            return;
+            return -5;
         }
         /* Now we know what the archive size will be, create it. */
         appleArchive = malloc(archiveSize); /* buffer to write to fd */
         if (neo_aa_archive_plain_write_buffer(raw, appleArchive)) {
             NEO_AA_LogError("neo_aa_archive_plain_write_buffer failed\n");
-            return;
+            return -6;
         }
         neo_aa_archive_plain_destroy_nozero(raw);
+        appleArchiveSize = archiveSize;
     }
     uint8_t *currentHeader = appleArchive;
     int extracting = 1;
@@ -1091,48 +1110,42 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
         chdir(outputPath);
     }
     while (extracting) {
-        dirtyUglyHack = *(uint32_t **)&currentHeader;
-        headerMagic = dirtyUglyHack[0];
+        memcpy(&headerMagic, currentHeader, 4);
         if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
             free(appleArchive);
             NEO_AA_LogError("magic not AA01/YAA1.\n");
-            return;
+            return -7;
         }
-        uint16_t headerSize = (dirtyUglyHack[1] & 0xffff);
+        uint16_t headerSize;
+        memcpy(&headerSize, currentHeader + 4, 2);
         NeoAAHeader header = neo_aa_header_create_with_encoded_data(headerSize, currentHeader);
         if (!header) {
             free(appleArchive);
             NEO_AA_LogError("header creation fail\n");
-            return;
+            return -8;
         }
         uint32_t typKey = NEO_AA_FIELD_C("TYP");
         int typIndex = neo_aa_header_get_field_key_index(header, typKey);
         if (typIndex == -1) {
             free(appleArchive);
             NEO_AA_LogError("no TYP field\n");
-            return;
+            return -9;
         }
         uint32_t patKey = NEO_AA_FIELD_C("PAT");
         int patIndex = neo_aa_header_get_field_key_index(header, patKey);
         if (patIndex == -1) {
             free(appleArchive);
             NEO_AA_LogError("no PAT field\n");
-            return;
+            return -10;
         }
         uint32_t modKey = NEO_AA_FIELD_C("MOD");
         int modIndex = neo_aa_header_get_field_key_index(header, modKey);
-        if (modIndex == -1) {
-            free(appleArchive);
-            NEO_AA_LogError("no MOD field\n");
-            return;
-        }
         uint32_t uidKey = NEO_AA_FIELD_C("UID");
         int uidIndex = neo_aa_header_get_field_key_index(header, uidKey);
         uint32_t gidKey = NEO_AA_FIELD_C("GID");
         int gidIndex = neo_aa_header_get_field_key_index(header, gidKey);
         uint32_t xatKey = NEO_AA_FIELD_C("XAT");
         int xatIndex = neo_aa_header_get_field_key_index(header, xatKey);
-        uint64_t accessMode = neo_aa_header_get_field_key_uint(header, modIndex);
         size_t pathSize = neo_aa_header_get_field_size(header, patIndex);
         uint8_t typEntryType = neo_aa_header_get_field_key_uint(header, typIndex);
         struct stat st;
@@ -1151,7 +1164,13 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
 #if defined(_WIN32) || defined(WIN32)
             mkdir(pathName);
 #else
-            mkdir(pathName, accessMode);
+            uint64_t accessMode;
+            if (modIndex != -1) {
+                accessMode = neo_aa_header_get_field_key_uint(header, modIndex);
+                mkdir(pathName, accessMode);
+            } else {
+                mkdir(pathName, 755);
+            }
             int fd = open(pathName, O_RDWR | O_NOFOLLOW);
             if (fd != -1) {
                 fstat(fd, &st);
@@ -1181,7 +1200,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 free(pathName);
                 free(appleArchive);
                 NEO_AA_LogError("no DAT field\n");
-                return;
+                return -12;
             }
             uint64_t dataSize = neo_aa_header_get_field_key_uint(header, datIndex);
             /* make sure we don't overflow and leak data in output */
@@ -1190,14 +1209,14 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 free(pathName);
                 free(appleArchive);
                 NEO_AA_LogError("dataSize overflow\n");
-                return;
+                return -13;
             }
             FILE *fp = fopen(pathName, "w+");
             if (!fp) {
                 free(appleArchive);
                 NEO_AA_LogErrorF("could not open pathName: %s\n",pathName);
                 free(pathName);
-                return;
+                return -14;
             }
             uint8_t *fileData = currentHeader + headerSize;
             /* copy file data to buffer */
@@ -1218,6 +1237,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
                 }
                 fchown(fd, fileUid, fileGid);
                 if (modIndex != -1) {
+                    uint64_t accessMode = neo_aa_header_get_field_key_uint(header, modIndex);
                     fchmod(fd, accessMode);
                 }
             }
@@ -1234,7 +1254,7 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
             free(pathName);
             free(appleArchive);
             NEO_AA_LogErrorF("AAEntryType %c not supported yet, only D and F currently are\n",typEntryType);
-            return;
+            return -15;
         }
         free(pathName);
         size_t currentHeader_IndexOfArchive = (currentHeader - appleArchive);
@@ -1246,4 +1266,9 @@ void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath)
     free(appleArchive);
     /* Restore original working dir */
     chdir(oldWorkingDir);
+    return 0;
+}
+
+void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath) {
+    neo_aa_extract_aar_to_path_err(archivePath, outputPath);
 }

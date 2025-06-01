@@ -13,30 +13,6 @@ NEO_INTERNAL_API uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
     return ((num>>24)&0xff) | ((num<<8)&0xff0000) | ((num>>8)&0xff00) | ((num<<24)&0xff000000);
 }
 
-NEO_INTERNAL_API char *internal_do_not_call_load_binary(const char *binaryPath, size_t *binarySize) {
-    /* load binary into memory */
-    FILE *fp = fopen(binaryPath,"rb");
-    if (!fp) {
-        NEO_AA_LogError("failed to find path\n");
-        return NULL;
-    }
-    fseek(fp, 0, SEEK_END);
-    size_t _binarySize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    char *binary = malloc(_binarySize);
-    size_t bytesRead = fread(binary, 1, _binarySize, fp);
-    fclose(fp);
-    if (bytesRead < _binarySize) {
-        free(binary);
-        NEO_AA_LogErrorF("failed to read the entire file (read %zu bytes, expected %zu).\n",bytesRead,_binarySize);
-        return NULL;
-    }
-    if (binarySize) {
-        *binarySize = _binarySize;
-    }
-    return binary;
-}
-
 
 NEO_INTERNAL_API char *internal_do_not_call_memrchr(char *s, int c, size_t n) {
     uint64_t i = n;

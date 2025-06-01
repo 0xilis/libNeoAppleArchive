@@ -29,8 +29,6 @@ uint32_t internal_do_not_call_flip_edian_32(uint32_t num);
 #define NEO_AA_AssertUnsupportedKey(key, unsupported) if (key == NEO_AA_FIELD_C(unsupported)) {NEO_AA_UnsupportedKey(unsupported);exit(1);};
 #define NEO_AA_ErrorHeapAlloc() NEO_AA_LogError("libNeoAppleArchive failed to malloc/realloc\n")
 
-extern size_t lastLoadedBinarySize_internal_do_not_use;
-char *internal_do_not_call_load_binary(const char *binaryPath, size_t *binarySize);
 char *internal_do_not_call_memrchr(char *s, int c, size_t n);
 void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob, size_t blobSize, int fd);
 void internal_do_not_call_is_field_key_available(uint32_t key);
