@@ -1096,18 +1096,24 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
     }
     uint8_t *currentHeader = appleArchive;
     int extracting = 1;
-    char *slashEndOfPath = internal_do_not_call_memrchr((char *)outputPath, '/', strlen(outputPath));
+    size_t outputPathLen = strlen(outputPath);
+    char *slashEndOfPath = internal_do_not_call_memrchr((char *)outputPath, '/', outputPathLen);
     char *newPath;
-    if (slashEndOfPath) {
+    if (outputPath[outputPathLen - 1] == '/') {
         size_t sizeOfNewPath = slashEndOfPath - outputPath;
         newPath = malloc(sizeOfNewPath + 1);
         strncpy(newPath, outputPath, sizeOfNewPath);
-        chdir(newPath);
+        newPath[sizeOfNewPath + 1] = 0;
+        if (chdir(newPath)) {
+            NEO_AA_LogErrorF("chdir(newPath) failed for %s, trying anyway...\n",newPath);
+        }
         free(newPath);
     } else {
         /* BAD! change this later. */
         newPath = (char *)outputPath;
-        chdir(outputPath);
+        if (chdir(outputPath)) {
+            NEO_AA_LogErrorF("chdir(outputPath) failed for %s, trying anyway...\n", outputPath);
+        }
     }
     while (extracting) {
         memcpy(&headerMagic, currentHeader, 4);
@@ -1211,12 +1217,20 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 NEO_AA_LogError("dataSize overflow\n");
                 return -13;
             }
+
+            char fullPath[1024];
+            snprintf(fullPath, sizeof(fullPath), "%s/%s", newPath, pathName);
+
             FILE *fp = fopen(pathName, "w+");
             if (!fp) {
-                free(appleArchive);
-                NEO_AA_LogErrorF("could not open pathName: %s\n",pathName);
+                NEO_AA_LogErrorF("could not open pathName: %s, trying to open fullPath instead as last resort...\n",pathName);
                 free(pathName);
-                return -14;
+                fp = fopen(fullPath, "w+");
+                if (!fp) {
+                    free(appleArchive);
+                    NEO_AA_LogErrorF("could not open fullPath: %s\n", fullPath);
+                    return -14;
+                }
             }
             uint8_t *fileData = currentHeader + headerSize;
             /* copy file data to buffer */
