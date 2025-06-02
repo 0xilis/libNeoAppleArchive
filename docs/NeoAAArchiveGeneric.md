@@ -24,7 +24,7 @@ if (generic) {
      * Since we have gotten the raw element from our NeoAAArchiveGeneric,
      * we should free the NeoAAArchiveGeneric as we are no longer accessing it.
      */
-    free(raw);
+    free(generic);
 
     // ... code using the NeoAAArchivePlain here.
 
