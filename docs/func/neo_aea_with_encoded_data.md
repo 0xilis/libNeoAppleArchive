@@ -9,7 +9,7 @@ NeoAEAArchive neo_aea_with_encoded_data(uint8_t *encodedData, size_t encodedData
 
 #### encodedData
 
-The encoded data to form the Apple Encrypted Archive from.
+The encoded data of the Apple Encrypted Archive to form the NeoAEAArchive from.
 
 #### encodedDataSize
 
