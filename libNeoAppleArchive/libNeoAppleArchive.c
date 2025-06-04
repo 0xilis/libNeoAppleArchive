@@ -1113,6 +1113,8 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
         newPath = (char *)outputPath;
         if (chdir(outputPath)) {
             NEO_AA_LogErrorF("chdir(outputPath) failed for %s, trying anyway...\n", outputPath);
+            mkdir(outputPath, 755);
+            chdir(outputPath);
         }
     }
     while (extracting) {
@@ -1286,8 +1288,9 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
             if (slashEndOfPathName) {
                 /* TODO: Hope this doesn't have issues... */
                 char symlinkPath[1024] = {0};
-                strncpy(symlinkPath, pathName, strlen(slashEndOfPathName));
-                sprintf(symlinkPath + strlen(slashEndOfPathName), "%s", lnkPath);
+                size_t slashEndOfPathNameLen = slashEndOfPathName - pathName;
+                strncpy(symlinkPath, pathName, slashEndOfPathNameLen);
+                sprintf(symlinkPath + slashEndOfPathNameLen, "%s", lnkPath);
                 symlink(symlinkPath, pathName);
             } else {
                 symlink(lnkPath, pathName);
