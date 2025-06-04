@@ -1218,13 +1218,12 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 return -13;
             }
 
-            char fullPath[1024];
-            snprintf(fullPath, sizeof(fullPath), "%s/%s", newPath, pathName);
-
             FILE *fp = fopen(pathName, "w+");
             if (!fp) {
                 NEO_AA_LogErrorF("could not open pathName: %s, trying to open fullPath instead as last resort...\n",pathName);
                 free(pathName);
+                char fullPath[1024];
+                snprintf(fullPath, sizeof(fullPath), "%s/%s", newPath, pathName);
                 fp = fopen(fullPath, "w+");
                 if (!fp) {
                     free(appleArchive);
@@ -1232,15 +1231,20 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                     return -14;
                 }
             }
-            uint8_t *fileData = currentHeader + headerSize;
-            /* copy file data to buffer */
-            fwrite(fileData, dataSize, 1, fp);
 #if defined(_WIN32) || defined(WIN32)
             /* Windows does not implement unix uid_t/gid_t */
 #else
             int fd = fileno(fp);
             if (fd != -1) {
                 fstat(fd, &st);
+                if (S_ISLNK(st.st_mode)) {
+                    /* prevent arbitrary file write */
+                    fclose(fp);
+                    free(appleArchive);
+                    NEO_AA_LogErrorF("tried to open normal file, instead opened symlink at %s\n", pathName);
+                    free(pathName);
+                    return;
+                }
                 uid_t fileUid = st.st_uid;
                 gid_t fileGid = st.st_gid;
                 if (uidIndex != -1) {
@@ -1256,6 +1260,9 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 }
             }
 #endif
+            uint8_t *fileData = currentHeader + headerSize;
+            /* copy file data to buffer */
+            fwrite(fileData, dataSize, 1, fp);
             size_t xatSize = 0;
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
@@ -1264,10 +1271,32 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
             }
             fclose(fp);
             currentHeader += (headerSize + dataSize + xatSize);
+        } else if (typEntryType == 'L') {
+            /* Symlink for file */
+            uint32_t lnkKey = NEO_AA_FIELD_C("LNK");
+            int lnkIndex = neo_aa_header_get_field_key_index(header, lnkKey);
+            if (lnkIndex == -1) {
+                free(pathName);
+                free(appleArchive);
+                fprintf(stderr, "neo_aa_extract_aar_to_path: no LNK field\n");
+                return;
+            }
+            char *lnkPath = neo_aa_header_get_field_key_string(header, lnkIndex);
+            uint8_t *slashEndOfPathName = (uint8_t *)internal_do_not_call_memrchr(pathName, '/', strlen(pathName));
+            if (slashEndOfPathName) {
+                /* TODO: Hope this doesn't have issues... */
+                char *symlinkPath[1024] = {0};
+                strncpy(symlinkPath, pathName, strlen(slashEndOfPathName));
+                sprintf(symlinkPath + strlen(slashEndOfPathName), "%s", lnkPath);
+                symlink(symlinkPath, pathName);
+            } else {
+                symlink(lnkPath, pathName);
+            }
+            free(lnkPath);
         } else {
             free(pathName);
             free(appleArchive);
-            NEO_AA_LogErrorF("AAEntryType %c not supported yet, only D and F currently are\n",typEntryType);
+            NEO_AA_LogErrorF("AAEntryType %c not supported yet, only D, F, and L currently are\n",typEntryType);
             return -15;
         }
         free(pathName);
