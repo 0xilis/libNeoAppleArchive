@@ -1223,9 +1223,9 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
             FILE *fp = fopen(pathName, "w+");
             if (!fp) {
                 NEO_AA_LogErrorF("could not open pathName: %s, trying to open fullPath instead as last resort...\n",pathName);
-                free(pathName);
                 char fullPath[1024];
                 snprintf(fullPath, sizeof(fullPath), "%s/%s", newPath, pathName);
+                free(pathName);
                 fp = fopen(fullPath, "w+");
                 if (!fp) {
                     free(appleArchive);
