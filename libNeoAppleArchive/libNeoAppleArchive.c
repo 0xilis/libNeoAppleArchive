@@ -1243,7 +1243,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                     free(appleArchive);
                     NEO_AA_LogErrorF("tried to open normal file, instead opened symlink at %s\n", pathName);
                     free(pathName);
-                    return;
+                    return -16;
                 }
                 uid_t fileUid = st.st_uid;
                 gid_t fileGid = st.st_gid;
@@ -1279,13 +1279,13 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 free(pathName);
                 free(appleArchive);
                 fprintf(stderr, "neo_aa_extract_aar_to_path: no LNK field\n");
-                return;
+                return -17;
             }
             char *lnkPath = neo_aa_header_get_field_key_string(header, lnkIndex);
-            uint8_t *slashEndOfPathName = (uint8_t *)internal_do_not_call_memrchr(pathName, '/', strlen(pathName));
+            const char *slashEndOfPathName = internal_do_not_call_memrchr(pathName, '/', strlen(pathName));
             if (slashEndOfPathName) {
                 /* TODO: Hope this doesn't have issues... */
-                char *symlinkPath[1024] = {0};
+                char symlinkPath[1024] = {0};
                 strncpy(symlinkPath, pathName, strlen(slashEndOfPathName));
                 sprintf(symlinkPath + strlen(slashEndOfPathName), "%s", lnkPath);
                 symlink(symlinkPath, pathName);
