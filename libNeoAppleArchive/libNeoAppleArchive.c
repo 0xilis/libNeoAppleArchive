@@ -1296,6 +1296,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 symlink(lnkPath, pathName);
             }
             free(lnkPath);
+            currentHeader += headerSize;
         } else {
             free(pathName);
             free(appleArchive);
