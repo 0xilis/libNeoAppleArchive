@@ -1113,7 +1113,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
         newPath = (char *)outputPath;
         if (chdir(outputPath)) {
             NEO_AA_LogErrorF("chdir(outputPath) failed for %s, trying anyway...\n", outputPath);
-            mkdir(outputPath, 755);
+            mkdir(outputPath, 0755);
             chdir(outputPath);
         }
     }
@@ -1177,7 +1177,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 accessMode = neo_aa_header_get_field_key_uint(header, modIndex);
                 mkdir(pathName, accessMode);
             } else {
-                mkdir(pathName, 755);
+                mkdir(pathName, 0755);
             }
             int fd = open(pathName, O_RDWR | O_NOFOLLOW);
             if (fd != -1) {
@@ -1290,7 +1290,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 char symlinkPath[1024] = {0};
                 size_t slashEndOfPathNameLen = slashEndOfPathName - pathName;
                 strncpy(symlinkPath, pathName, slashEndOfPathNameLen);
-                sprintf(symlinkPath + slashEndOfPathNameLen, "%s", lnkPath);
+                sprintf(symlinkPath + slashEndOfPathNameLen, "/%s", lnkPath);
                 symlink(symlinkPath, pathName);
             } else {
                 symlink(lnkPath, pathName);
