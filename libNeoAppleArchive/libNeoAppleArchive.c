@@ -1284,17 +1284,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
                 return -17;
             }
             char *lnkPath = neo_aa_header_get_field_key_string(header, lnkIndex);
-            const char *slashEndOfPathName = internal_do_not_call_memrchr(pathName, '/', strlen(pathName));
-            if (slashEndOfPathName) {
-                /* TODO: Hope this doesn't have issues... */
-                char symlinkPath[1024] = {0};
-                size_t slashEndOfPathNameLen = slashEndOfPathName - pathName;
-                strncpy(symlinkPath, pathName, slashEndOfPathNameLen);
-                sprintf(symlinkPath + slashEndOfPathNameLen, "/%s", lnkPath);
-                symlink(symlinkPath, pathName);
-            } else {
-                symlink(lnkPath, pathName);
-            }
+            symlink(lnkPath, pathName);
             free(lnkPath);
             currentHeader += headerSize;
         } else {
