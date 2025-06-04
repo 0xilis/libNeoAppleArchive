@@ -1161,9 +1161,12 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
         size_t xatSize = 0;
         if (!pathSize) {
             /* directory has empty name, this is only for creating outputPath */
-            size_t dirNameSize = strlen(outputPath);
-            pathName = malloc(dirNameSize + 1);
-            strncpy(pathName, outputPath, dirNameSize);
+            if (xatIndex != -1) {
+                /* Somehow the outputPath has its own XAT??? Just skip it... */
+                xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
+            }
+            currentHeader += (headerSize + xatSize);
+            continue;
         } else {
             pathName = neo_aa_header_get_field_key_string(header, patIndex);
         }
@@ -1265,7 +1268,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
             uint8_t *fileData = currentHeader + headerSize;
             /* copy file data to buffer */
             fwrite(fileData, dataSize, 1, fp);
-            size_t xatSize = 0;
+            xatSize = 0;
             if (xatIndex != -1) {
                 xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
                 uint8_t *xattrBlob = currentHeader + headerSize + dataSize;
