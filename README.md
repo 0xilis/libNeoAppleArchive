@@ -1,11 +1,7 @@
 # libNeoAppleArchive
 Cross-compat library for parsing Apple Archive and Apple Encrypted Archive.
 
-### What isn't finished
-- LZMA and LZ4 compressed `.aar`s; only `RAW`, `LZFSE`, `LZBITMAP` and `ZLIB` are currently supported
-- Multi-Threadded support
-
-### What is
+### What it features
 Functions for messing around with headers, extracting, and archiving apple archives. There are functions for manually creating apple archives (or modifying existing ones), as well as convienience functions. YAA is also supported, as it is just legacy Apple Archive, and all YAA files are just Apple Archives with a different magic essentially.
 
 ### Roadmap
@@ -13,6 +9,7 @@ Functions for messing around with headers, extracting, and archiving apple archi
 - [x] Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` and `AEA_PROFILE__HKDF_SHA256_AESCTR_HMAC__SYMMETRIC__NONE` profiles.
 - [x] Convienience functions for archiving / extracting files and directories.
 - [ ] Making code more readable
+- [ ] Multi-threadded support
 - [ ] GUI for Windows/macOS/Linux
 
 ### Compatibility
@@ -28,7 +25,7 @@ If the end result is compressed under ZLIB ends up having the same compressedSiz
 # Libraries Used
 [liblzfse](https://github.com/lzfse/lzfse) is owned by Apple Inc. It is added as a submodule in `libNeoAppleArchive/compression/lzfse`, and the Makefile builds it into `build/lzfse`.
 
-[libzbitmap](https://github.com/eafer/libzbitmap) is owned by Corellium LLC, but is reversed engineered from Apple Inc's implementation. It is added as a submodule in `libNeoAppleArchive/compression/libzbitmap`, and the Makefile builds it into `build/libzbitmap`.
+[libzbitmap](https://github.com/eafer/libzbitmap) is owned by Corellium LLC. It is added as a submodule in `libNeoAppleArchive/compression/libzbitmap`, and the Makefile builds it into `build/libzbitmap`.
 
 [zlib](https://zlib.net/) is not linked in the final library but is rather dynamically linked, as it is assumed to already be available on the OS itself.
 
