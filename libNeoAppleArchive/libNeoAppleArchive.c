@@ -457,39 +457,87 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
         /* pbz* type, so must be compressed archive */
         char compressionType = magic >> 24;
         if (compressionType == 'e') {
-            /* type is LZFSE */
-            /* compressed size of aar is stored at 0x18 in binary */
-            size_t compressedSize = FLIP_32(*((uint32_t *)(data + 0x18)));
-            /* uncompressed size of aar is stored at 0x10 in binary */
-            size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
-            uint8_t *encodedRAWData = malloc(uncompressedSize);
+            size_t fileHeaderMagic = 0xC;
+            size_t blockHeaderSize = 0x10;
+            uint8_t *current = data + fileHeaderMagic;
+            size_t remaining = encodedSize - fileHeaderMagic;
+            size_t totalUncompressedSize = 0;
+            size_t totalCompressedSize = 0;
+            uint8_t *encodedRAWData = NULL;
+            uint8_t *currentUncompressedPos = NULL;
+            
+            while (remaining > 0) {
+                if (remaining < blockHeaderSize) {
+                    NEO_AA_LogError("corrupted data: header too short\n");
+                    return NULL;
+                }
+                size_t blockUncompressedSize = FLIP_32(*((uint32_t *)(current + 0x4)));
+                size_t blockCompressedSize = FLIP_32(*((uint32_t *)(current + 0xC)));
+                size_t blockTotalSize = blockHeaderSize + blockCompressedSize;
+                if (remaining < blockTotalSize) {
+                    NEO_AA_LogError("corrupted data: block exceeds buffer\n");
+                    return NULL;
+                }
+
+                totalUncompressedSize += blockUncompressedSize;
+                totalCompressedSize += blockCompressedSize;  /* Only compressed data portion */
+                current += blockTotalSize;
+                remaining -= blockTotalSize;
+            }
+
+            encodedRAWData = malloc(totalUncompressedSize);
             if (!encodedRAWData) {
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
-            size_t decompressedBytes = lzfse_decode_buffer(encodedRAWData, uncompressedSize, data + 0x1C, compressedSize, 0);
-            if (decompressedBytes != uncompressedSize) {
-                free(encodedRAWData);
-                NEO_AA_LogError("failed to decompress LZFSE data\n");
-                return NULL;
+
+            current = data + fileHeaderMagic;
+            remaining = encodedSize - fileHeaderMagic;
+            currentUncompressedPos = encodedRAWData;
+            while (remaining > 0) {
+                size_t blockUncompressedSize = FLIP_32(*((uint32_t *)(current + 0x4)));
+                size_t blockCompressedSize = FLIP_32(*((uint32_t *)(current + 0xC)));
+                size_t blockTotalSize = blockHeaderSize + blockCompressedSize;
+                size_t decompressedBytes = lzfse_decode_buffer(
+                    currentUncompressedPos,
+                    blockUncompressedSize,
+                    current + blockHeaderSize,
+                    blockCompressedSize,
+                    0
+                );
+                
+                if (decompressedBytes != blockUncompressedSize) {
+                    free(encodedRAWData);
+                    NEO_AA_LogError("failed to decompress LZFSE data\n");
+                    return NULL;
+                }
+                
+                currentUncompressedPos += blockUncompressedSize;
+                current += blockTotalSize;
+                remaining -= blockTotalSize;
             }
-            NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
+
+            NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(
+                totalUncompressedSize,
+                encodedRAWData
+            );
             free(encodedRAWData);
+
             if (!plainArchive) {
-                /* Failed to create plain archive, return NULL. */
                 return NULL;
             }
+
             NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
             if (!genericArchive) {
-                /* Not enough space to create the generic archive. */
                 neo_aa_archive_plain_destroy_nozero(plainArchive);
                 NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
                 return NULL;
             }
+
             genericArchive->raw = plainArchive;
             genericArchive->compression = NEO_AA_COMPRESSION_LZFSE;
-            genericArchive->uncompressedSize = uncompressedSize;
-            genericArchive->compressedSize = compressedSize;
+            genericArchive->uncompressedSize = totalUncompressedSize;
+            genericArchive->compressedSize = totalCompressedSize;
             return genericArchive;
         } else if (compressionType == 'z') {
             /* type is ZLIB */
