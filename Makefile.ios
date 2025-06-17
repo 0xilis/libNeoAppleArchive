@@ -5,10 +5,11 @@
 # This is BAD and UNTRUSTWORTHY! **NEVER** a good idea to ship precompiled libraries!
 # In the future, find out a solution to this...
 
-ARCHS = arm64
+ARCHS = armv7 arm64
 TARGET := iphone:clang:latest:6.0
-# PREFIX = $(THEOS)/toolchain/Xcode.xctoolchain/usr/bin/
-PREFIX = /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/
+# TARGET := simulator:clang:latest:13.0
+PREFIX = $(THEOS)/toolchain/Xcode.xctoolchain/usr/bin/
+# PREFIX = /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/
 SYSROOT = $(THEOS)/sdks/iPhoneOS14.4.sdk
 
 include $(THEOS)/makefiles/common.mk
@@ -16,8 +17,10 @@ include $(THEOS)/makefiles/common.mk
 LIBRARY_NAME = libNeoAppleArchive
 
 libNeoAppleArchive_FILES = $(wildcard libNeoAppleArchive/*.c) libNeoAppleArchive/compression/libzbitmap/libzbitmap.c $(wildcard libNeoAppleArchive/compression/lzfse/src/*.c)
-libNeoAppleArchive_CFLAGS = -IlibNeoAppleArchive/compression/libzbitmap -IlibNeoAppleArchive/compression/lzfse/src -Iios-support/ -DOPENSSL_API_COMPAT=30400 -Wno-missing-declarations
+libNeoAppleArchive_CFLAGS = -IlibNeoAppleArchive/compression/libzbitmap -IlibNeoAppleArchive/compression/lzfse/src -Iios-support/ -DOPENSSL_API_COMPAT=30400 -Wno-missing-declarations -Wno-missing-braces
+# libNeoAppleArchive_CFLAGS = -IlibNeoAppleArchive/compression/libzbitmap -IlibNeoAppleArchive/compression/lzfse/src -Iios-sim-support/ -DOPENSSL_API_COMPAT=30400 -Wno-missing-declarations -Wno-missing-braces
 libNeoAppleArchive_LDFLAGS = -L./ios-support/ -lplist-2.0 -lz -lssl -lcrypto
-libNeoAppleArchive_INSTALL_PATH = /usr/lib
+# libNeoAppleArchive_LDFLAGS = -L./ios-sim-support/ -lz -lssl -lcrypto
+# libNeoAppleArchive_INSTALL_PATH = /usr/lib
 
 include $(THEOS_MAKE_PATH)/library.mk
