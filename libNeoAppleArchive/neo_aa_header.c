@@ -432,9 +432,9 @@ void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t field
 
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize) {
     if (!fieldSize) {
-        if (blobSize < 0xFFFF) {
+        if (blobSize < UINT16_MAX) {
             fieldSize = 2;
-        } else if (blobSize < 0xFFFFFFFF) {
+        } else if (blobSize < UINT32_MAX) {
             fieldSize = 4;
         } else {
             fieldSize = 8;

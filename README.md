@@ -11,6 +11,7 @@ Functions for messing around with headers, extracting, and archiving apple archi
 - [ ] Making code more readable
 - [ ] Multi-threadded support
 - [ ] GUI for Windows/macOS/Linux
+- [ ] CommonCrypto variants for macOS to allow use without OpenSSL.
 
 ### Compatibility
 - Most Darwin Operating Systems (macOS, iOS, watchOS, visionOS etc.) 
