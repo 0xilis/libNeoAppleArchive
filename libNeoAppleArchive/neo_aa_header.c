@@ -84,21 +84,36 @@ void neo_aa_header_destroy_nozero(NeoAAHeader header) {
 }
 
 NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
-    uint32_t *dumbHack = *(uint32_t **)&data;
-    uint32_t headerMagic = dumbHack[0];
+    uint32_t headerMagic;
+    uint16_t declaredSize;
+
+    if (data == NULL || encodedSize < 6 || encodedSize > UINT16_MAX) {
+        NEO_AA_LogError("invalid encoded header size\n");
+        return NULL;
+    }
+
+    memcpy(&headerMagic, data, sizeof(headerMagic));
+
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header\n");
         return NULL;
     }
-    if ((dumbHack[1] & 0xffff) != encodedSize) {
+
+    memcpy(&declaredSize, data + 4, sizeof(declaredSize));
+
+    if ((size_t)declaredSize != encodedSize) {
         NEO_AA_LogError("encodedSize mismatch\n");
         return NULL;
     }
-    if (encodedSize < 6) {
-        NEO_AA_LogError("encodedSize too small\n");
-        return NULL;
-    }
-    NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
+
+    /*
+     * GHSA-chpv-g239-pp39: (C)
+     *
+     * We need to allocate with calloc to zero out other fields
+     * since if a 6-byte header is inputted, it would have us return
+     * uninitialized pointers. BAD!
+     */
+    NeoAAHeader header = calloc(1, sizeof(struct neo_aa_header_impl));
     if (!header) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
@@ -119,15 +134,58 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
     /* now, fill with AAFieldKeys */
     uint32_t currentPos = 6;
     uint32_t fieldCount = 0;
+    if (!fieldKeys || !fieldTypes || !fieldKeySizes || !fieldKeyValues) {
+        goto free_all;
+    }
     while (currentPos < encodedSize) {
+        /*
+         * GHSA-chpv-g239-pp39: (A/D)
+         *
+         * field keys are 4 bytes in size and we need to ensure
+         * we have enough for the field key
+         */
+        if (encodedSize - currentPos < 4) {
+            NEO_AA_LogError("incomplete field key\n");
+            goto free_all;
+        }
+
         fieldCount++;
+        void *oldPtr = fieldKeys;
         fieldKeys = realloc(fieldKeys, sizeof(uint32_t) * fieldCount);
+        if (!fieldKeys) {
+            free(oldPtr);
+            NEO_AA_ErrorHeapAlloc();
+            goto free_all;
+        }
+        oldPtr = fieldTypes;
         fieldTypes = realloc(fieldTypes, fieldCount);
+        if (!fieldTypes) {
+            free(oldPtr);
+            NEO_AA_ErrorHeapAlloc();
+            goto free_all;
+        }
+        oldPtr = fieldKeySizes;
         fieldKeySizes = realloc(fieldKeySizes, sizeof(size_t) * fieldCount);
+        if (!fieldKeySizes) {
+            free(oldPtr);
+            NEO_AA_ErrorHeapAlloc();
+            goto free_all;
+        }
+        oldPtr = fieldKeyValues;
         fieldKeyValues = realloc(fieldKeyValues, sizeof(void *) * fieldCount);
+        if (!fieldKeyValues) {
+            free(oldPtr);
+            NEO_AA_ErrorHeapAlloc();
+            return NULL;
+        }
         
         char *currentPointer = headerData + currentPos;
-        dumbHack = *(uint32_t **)&currentPointer;
+        /*
+         * TODO:
+         * This is bad code! Yuck!
+         * Fix later, in this context should not be an issue...
+         */
+        uint32_t *dumbHack = *(uint32_t **)&currentPointer;
         uint32_t fieldKeyPlusSubtype = dumbHack[0];
         fieldKeyPlusSubtype = FLIP_32(fieldKeyPlusSubtype);
         uint32_t fieldKey = (fieldKeyPlusSubtype & 0xffffff00); /* first 3 bytes */
@@ -218,33 +276,31 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 uint16_t *sizeShortPtr = *(uint16_t **)&sizeCharPtr;
                 fieldKeySize = sizeShortPtr[0];
                 if (encodedSize-currentPos < fieldKeySize) {
+                    NEO_AA_LogError("string length reached past encodedData\n");
+free_all:
                     free(fieldKeys);
                     free(fieldKeySizes);
                     free(fieldTypes);
                     free(headerData);
-                    for (unsigned int i = 0; i < fieldCount - 1; i++) {
-                        free(fieldKeyValues[i]);
+                    /*
+                     * We need to check if fieldCount is not 0, as if
+                     * it is, the fieldCount - 1 will underflow
+                     */
+                    if (fieldCount) {
+                        for (unsigned int i = 0; i < fieldCount - 1; i++) {
+                            free(fieldKeyValues[i]);
+                        }
+                        free(fieldKeyValues);
                     }
-                    free(fieldKeyValues);
                     free(header);
-                    NEO_AA_LogError("string length reached past encodedData\n");
                     return NULL;
                 }
                 currentPos += 2;
                 break;
                 
             default:
-                free(fieldKeys);
-                free(fieldKeySizes);
-                free(fieldTypes);
-                free(headerData);
-                for (unsigned int i = 0; i < fieldCount - 1; i++) {
-                    free(fieldKeyValues[i]);
-                }
-                free(fieldKeyValues);
-                free(header);
                 NEO_AA_LogErrorF("invalid field subtype (%x)\n",fieldKeyPlusSubtype);
-                return NULL;
+                goto free_all;
         }
         
         fieldKeys[fieldCount - 1] = fieldKey;

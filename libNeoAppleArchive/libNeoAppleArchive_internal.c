@@ -177,13 +177,20 @@ NEO_INTERNAL_API uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_
 }
 
 NEO_INTERNAL_API size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data) {
-    uint32_t *dumbHack = *(uint32_t **)&data;
-    uint32_t headerMagic = dumbHack[0];
+    if (data == NULL || maxSize < 6) {
+        NEO_AA_LogError("encoded data too small\n");
+        return 0;
+    }
+
+    uint32_t headerMagic;
+    memcpy(&headerMagic, data, sizeof(headerMagic));
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
         return 0;
     }
-    size_t encodedHeaderSize = (dumbHack[1] & 0xffff);
+
+    uint16_t encodedHeaderSize;
+    memcpy(&encodedHeaderSize, data + 4, sizeof(encodedHeaderSize));
     size_t archiveItemSize = encodedHeaderSize;
     if (maxSize < encodedHeaderSize) {
         NEO_AA_LogError("header size is larger than maxSize\n");

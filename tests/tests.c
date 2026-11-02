@@ -344,6 +344,29 @@ int main(int argc, const char * argv[]) {
         return -1;
     }
     neo_aa_archive_item_destroy(item);
+
+    /*
+     * GHSA-chpv-g239-pp3: (C)
+     * Test for regression
+     *
+     * TODO:
+     * This test is not great, as if the following OOB read
+     * is just 0 anyway, this test will not pick that up :(
+     * I don't care that much about accurate tests yet but
+     * in the future I do want to more accurately detect this.
+     */
+    uint8_t minimalData[6] = {'A', 'A', '0', '1', 6, 0};
+    header = neo_aa_header_create_with_encoded_data(6, minimalData);
+    if (!header) {
+        fprintf(stderr,"item->encodedBlobDataSize is not 0\n");
+        return -1;
+    }
+    if (header->fieldKeys || header->fieldKeySizes || header->fieldTypes || header->fieldValues) {
+        fprintf(stderr,"neo_aa_header_create_with_encoded_data() triggered OOB read with invalid pointers, this is BAD! visit GHSA-chpv-g239-pp3 on security page for reference\n");
+        free(header);
+        return -1;
+    }
+    neo_aa_header_destroy(header);
     printf("end tests\n");
     return 0;
 }

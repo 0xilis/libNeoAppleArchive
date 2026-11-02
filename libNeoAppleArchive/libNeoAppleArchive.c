@@ -315,14 +315,21 @@ void neo_aa_archive_item_destroy_nozero(NeoAAArchiveItem item) {
 }
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
-    /* Get the header size */
-    uint32_t *dumbHack = *(uint32_t **)&data;
-    uint32_t headerMagic = dumbHack[0];
+    if (data == NULL || encodedSize < 6) {
+        NEO_AA_LogError("encoded item too small\n");
+        return NULL;
+    }
+
+    uint32_t headerMagic;
+    memcpy(&headerMagic, data, sizeof(headerMagic));
     if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) { /* AA01/YAA1 */
         NEO_AA_LogError("data is not raw header (compression not yet supported)\n");
         return NULL;
     }
-    size_t encodedHeaderSize = (dumbHack[1] & 0xffff);
+
+    /* Get the header size */
+    uint16_t encodedHeaderSize;
+    memcpy(&encodedHeaderSize, data + 4, sizeof(encodedHeaderSize));
     if (encodedSize < encodedHeaderSize) {
         NEO_AA_LogError("header size is larger than encoded item size\n");
         return NULL;
@@ -363,7 +370,13 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
         }
         itemList = itemListNewPtr;
         size_t currentHeaderSize = internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(maxSize, data + position);
-        if (!currentHeaderSize) {
+        if (!currentHeaderSize || currentHeaderSize > USHRT_MAX) {
+            /*
+             * GHSA-chpv-g239-pp39: Make sure to free remaining items in itemList
+             */
+            for (int i = 0; i < itemCount - 1; i++) {
+                neo_aa_archive_item_destroy(itemList[i]);
+            }
             free(itemList);
             NEO_AA_LogError("failed to get header size\n");
             return NULL;
