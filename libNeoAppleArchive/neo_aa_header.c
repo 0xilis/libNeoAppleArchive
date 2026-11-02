@@ -181,13 +181,8 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         }
         
         char *currentPointer = headerData + currentPos;
-        /*
-         * TODO:
-         * This is bad code! Yuck!
-         * Fix later, in this context should not be an issue...
-         */
-        uint32_t *dumbHack = *(uint32_t **)&currentPointer;
-        uint32_t fieldKeyPlusSubtype = dumbHack[0];
+        uint32_t fieldKeyPlusSubtype;
+        memcpy(&fieldKeyPlusSubtype, currentPointer, sizeof(fieldKeyPlusSubtype));
         fieldKeyPlusSubtype = FLIP_32(fieldKeyPlusSubtype);
         uint32_t fieldKey = (fieldKeyPlusSubtype & 0xffffff00); /* first 3 bytes */
         char fieldKeySubtype = fieldKeyPlusSubtype & 0xff;
