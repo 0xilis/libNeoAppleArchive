@@ -161,6 +161,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         fieldTypes = realloc(fieldTypes, fieldCount);
         if (!fieldTypes) {
             free(oldPtr);
+
             NEO_AA_ErrorHeapAlloc();
             goto free_all;
         }
@@ -301,6 +302,16 @@ free_all:
             default:
                 NEO_AA_LogErrorF("invalid field subtype (%x)\n",fieldKeyPlusSubtype);
                 goto free_all;
+        }
+
+        /*
+         * GHSA-chpv-g239-pp39: (A)
+         *
+         * bounds check before allocation/copy
+         */
+        if (currentPos + fieldKeySize > encodedSize) {
+            NEO_AA_LogError("field value reached past encodedData\n");
+            goto free_all;
         }
         
         fieldKeys[fieldCount - 1] = fieldKey;
