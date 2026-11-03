@@ -363,7 +363,10 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
         itemCount++;
         NeoAAArchiveItem *itemListNewPtr = realloc(itemList, sizeof(NeoAAArchiveItem) * itemCount);
         if (!itemListNewPtr) {
-            free(itemList);
+            /*
+             * GHSA-chpv-g239-pp39: Make sure to free remaining items in itemList
+             */
+            neo_aa_archive_item_list_destroy(itemList, itemCount - 1);
             NEO_AA_ErrorHeapAlloc();
             return NULL;
         }
@@ -373,10 +376,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
             /*
              * GHSA-chpv-g239-pp39: Make sure to free remaining items in itemList
              */
-            for (int i = 0; i < itemCount - 1; i++) {
-                neo_aa_archive_item_destroy(itemList[i]);
-            }
-            free(itemList);
+            neo_aa_archive_item_list_destroy(itemList, itemCount - 1);
             NEO_AA_LogError("failed to get header size\n");
             return NULL;
         }
