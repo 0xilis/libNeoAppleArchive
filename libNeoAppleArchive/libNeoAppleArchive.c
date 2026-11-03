@@ -328,8 +328,7 @@ NeoAAArchiveItem neo_aa_archive_item_create_with_encoded_data(size_t encodedSize
     }
 
     /* Get the header size */
-    uint16_t encodedHeaderSize;
-    memcpy(&encodedHeaderSize, data + 4, sizeof(encodedHeaderSize));
+    size_t encodedHeaderSize = (size_t)((uint32_t)data[4] | ((uint32_t)data[5]<<8)); /* [fuzz-triage] 2-byte read */
     if (encodedSize < encodedHeaderSize) {
         NEO_AA_LogError("header size is larger than encoded item size\n");
         return NULL;

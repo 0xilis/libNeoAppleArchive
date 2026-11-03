@@ -189,8 +189,7 @@ NEO_INTERNAL_API size_t internal_do_not_call_neo_aa_archive_item_encoded_data_si
         return 0;
     }
 
-    uint16_t encodedHeaderSize;
-    memcpy(&encodedHeaderSize, data + 4, sizeof(encodedHeaderSize));
+    size_t encodedHeaderSize = (size_t)((uint32_t)data[4] | ((uint32_t)data[5]<<8)); /* [fuzz-triage] 2-byte read */
     size_t archiveItemSize = encodedHeaderSize;
     if (maxSize < encodedHeaderSize) {
         NEO_AA_LogError("header size is larger than maxSize\n");

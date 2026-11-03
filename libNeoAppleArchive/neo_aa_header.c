@@ -10,7 +10,7 @@
 #include <limits.h>
 
 NeoAAHeader neo_aa_header_create(void) {
-    NeoAAHeader header = malloc(sizeof(struct neo_aa_header_impl));
+    NeoAAHeader header = calloc(1, sizeof(struct neo_aa_header_impl)); /* [fuzz-triage] zero-init: 6-byte path left field ptrs uninit */
     if (!header) {
         NEO_AA_ErrorHeapAlloc();
         return NULL;
@@ -85,7 +85,6 @@ void neo_aa_header_destroy_nozero(NeoAAHeader header) {
 
 NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *data) {
     uint32_t headerMagic;
-    uint16_t declaredSize;
 
     if (data == NULL || encodedSize < 6 || encodedSize > UINT16_MAX) {
         NEO_AA_LogError("invalid encoded header size\n");
@@ -99,9 +98,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         return NULL;
     }
 
-    memcpy(&declaredSize, data + 4, sizeof(declaredSize));
-
-    if ((size_t)declaredSize != encodedSize) {
+    if ((size_t)((uint32_t)data[4] | ((uint32_t)data[5]<<8)) != encodedSize) {
         NEO_AA_LogError("encodedSize mismatch\n");
         return NULL;
     }
@@ -268,9 +265,13 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
                 
             case 'P':
                 fieldKeyType = NEO_AA_FIELD_TYPE_STRING;
-                char *sizeCharPtr = currentPointer + 4;
-                uint16_t *sizeShortPtr = *(uint16_t **)&sizeCharPtr;
-                fieldKeySize = sizeShortPtr[0];
+                if (currentPos + 6 > encodedSize) { /* [fuzz-triage] F4: bound string-size read */
+                    NEO_AA_LogError("string size field reached past encodedData\n");
+                    goto free_all;
+                }
+                uint16_t sizeShort; /* [fuzz-triage] F3: aligned read */
+                memcpy(&sizeShort, currentPointer + 4, 2);
+                fieldKeySize = sizeShort;
                 if (encodedSize-currentPos < fieldKeySize) {
                     NEO_AA_LogError("string length reached past encodedData\n");
 free_all:
@@ -286,8 +287,8 @@ free_all:
                         for (unsigned int i = 0; i < fieldCount - 1; i++) {
                             free(fieldKeyValues[i]);
                         }
-                        free(fieldKeyValues);
                     }
+                    free(fieldKeyValues);
                     free(header);
                     return NULL;
                 }
