@@ -501,6 +501,36 @@ NEO_INTERNAL_API struct aea_segment_header new_partial_segment(uint8_t* decrypte
     return segment;
 }
 
+NEO_INTERNAL_API static void free_segment(struct aea_segment_header* segment) {
+    if (!segment) {
+        return;
+    }
+
+    free(segment->hash);
+    free(segment->segmentData);
+
+    *segment = (struct aea_segment_header){0};
+}
+
+NEO_INTERNAL_API static void free_clusters(struct aea_cluster_header* clusters, int numClusters, uint32_t segmentsPerCluster) {
+    if (!clusters) {
+        return;
+    }
+
+    for (int i = 0; i < numClusters; i++) {
+        if (clusters[i].segments) {
+            for (uint32_t j = 0; j < segmentsPerCluster; j++) {
+                free_segment(&clusters[i].segments[j]);
+            }
+
+            free(clusters[i].segments);
+            clusters[i].segments = NULL;
+        }
+    }
+
+    free(clusters);
+}
+
 NEO_INTERNAL_API struct aea_cluster_header new_partial_cluster(uint8_t* decryptedCluster, uint8_t* segmentMACs, int numSegments, int checksumAlgorithm) {
     struct aea_cluster_header cluster = (struct aea_cluster_header){0},
         errorCluster = cluster;
@@ -514,7 +544,10 @@ NEO_INTERNAL_API struct aea_cluster_header new_partial_cluster(uint8_t* decrypte
     for (int i = 0; i < numSegments; i++) {
         struct aea_segment_header segment = new_partial_segment(decryptedCluster, checksumAlgorithm);
         if (!memcmp(&segment, &emptySegment, sizeof(struct aea_segment_header))) {
-            // TODO: MEMORY LEAK: free segment
+            for (int j = 0; j < i; j++) {
+                free_segment(&cluster.segments[j]);
+            }
+            free(cluster.segments);
             return errorCluster;
         }
         decryptedCluster += segmentHeaderSize;
@@ -532,7 +565,10 @@ NEO_INTERNAL_API struct aea_cluster_header new_partial_cluster(uint8_t* decrypte
 }
 
 NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t encodedDataSize) {
-    NEO_AA_NullParamAssert(encodedData);
+    if (!encodedData) {
+        NEO_AA_LogError("neo_aea_with_encoded_data_nocopy was fed NULL encodedData\n");
+        return 0;
+    }
     NeoAEAArchive aea = calloc(1, sizeof(struct aea_archive));
     if (!aea) {
         NEO_AA_ErrorHeapAlloc();
@@ -542,7 +578,7 @@ NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t enco
     uint8_t *buf = encodedData + 12;
     void *data = NULL;
     if (!alloc_memcpy(&data, buf, aea->authDataSize)) {
-	    free(aea);
+	free(aea);
         return NULL;
     }
     aea->authData = data;
@@ -653,7 +689,10 @@ NeoAEAArchive neo_aea_archive_with_encoded_data_nocopy(uint8_t *encodedData, siz
 }
 
 NeoAEAArchive neo_aea_with_encoded_data(uint8_t *encodedData, size_t encodedDataSize) {
-    NEO_AA_NullParamAssert(encodedData);
+    if (!encodedData) {
+        NEO_AA_LogError("neo_aea_with_encoded_data was fed NULL encodedData\n");
+        return 0;
+    }
     uint8_t *encodedDataCopy = malloc(encodedDataSize);
     if (!encodedDataCopy) {
         NEO_AA_ErrorHeapAlloc();
@@ -673,7 +712,10 @@ NeoAEAArchive neo_aea_archive_with_encoded_data(uint8_t *encodedData, size_t enc
 }
 
 NeoAEAArchive neo_aea_with_path(const char *path) {
-    NEO_AA_NullParamAssert(path);
+    if (!path) {
+        NEO_AA_LogError("neo_aea_with_path was fed NULL path\n");
+        return 0;
+    }
     if (strlen(path) > 1024) {
         NEO_AA_LogError("path should not exceed 1024 characters\n");
         return 0;
@@ -781,8 +823,15 @@ NEO_INTERNAL_API int decrypt_clusters(NeoAEAArchive aea, uint8_t* mainKey, struc
             );
             free(segmentKey);
             if (!decryptedSegment) {
-                free(aea->clusters); // TODO: MEMORY LEAK: free all other segments too
+                for (size_t j = 0; j < rootHeader->segmentsPerCluster; j++) {
+                    free_segment(&cluster.segments[j]);
+                }
+                free(cluster.segments);
+
+                free_clusters(aea->clusters, i, rootHeader->segmentsPerCluster);
+
                 aea->encryptedClusters = encryptedClusters;
+                free(clusterKey);
                 return 0;
             }
             // direct assignment because the whole decrypted memory belongs to this single segment
@@ -801,7 +850,7 @@ NEO_INTERNAL_API int decrypt_clusters(NeoAEAArchive aea, uint8_t* mainKey, struc
             void *tmp = realloc(aea->clusters, clusterSize);
             if (!tmp) {
                 NEO_AA_ErrorHeapAlloc();
-                free(aea->clusters); // TODO: MEMORY LEAK: free all other segments too
+                free_clusters(aea->clusters, i + 1, rootHeader->segmentsPerCluster);
                 aea->encryptedClusters = encryptedClusters;
                 return 0;
             }
@@ -1448,6 +1497,7 @@ int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     /* Each segment is 40 bytes in size, so we do segmentsPerCluster times 40 for size */
     uint8_t *segmentHeaderEncodedRepresentation = malloc(rootHeader.segmentsPerCluster * 40);
     if (!segmentHeaderEncodedRepresentation) {
+        free(clusterHeaderKey);
         free(clusterKey);
         NEO_AA_LogError("malloc failed\n");
         return -1;
@@ -1464,6 +1514,7 @@ int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
     uint8_t *cluster0Hmacs = malloc(cluster0HmacsSize);
     if (!cluster0Hmacs) {
         free(segmentHeaderEncodedRepresentation);
+        free(clusterHeaderKey);
         free(clusterKey);
         NEO_AA_LogError("malloc failed\n");
         return -1;
@@ -1476,6 +1527,8 @@ int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         currentSegmentHMAC += 32;
     }
     if (hmac_verify(clusterHeaderKey, segmentHeaderEncodedRepresentation, rootHeader.segmentsPerCluster * 40, cluster0Hmacs, cluster0HmacsSize, aea->cluster0HeaderHMAC)) {
+        free(cluster0Hmacs);
+        free(segmentHeaderEncodedRepresentation);
         free(clusterHeaderKey);
         free(clusterKey);
         NEO_AA_LogError("AEA_CHEK hmac failed\n");
@@ -1494,6 +1547,8 @@ int neo_aea_verify(NeoAEAArchive aea, uint8_t *publicKey) {
         uint8_t *segmentKey = segment_key(clusterKey, i, keySize);
         if (hmac_verify(segmentKey, segment.segmentData, segment.compressedSize, 0, 0, segment.segmentHMAC)) {
             NEO_AA_LogErrorF("segment %d failed verification\n",i);
+            free(segmentKey);
+            free(clusterKey);
             return -1;
         }
         free(segmentKey);

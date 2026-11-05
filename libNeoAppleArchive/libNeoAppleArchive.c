@@ -167,7 +167,7 @@ void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCo
 
 void neo_aa_archive_plain_destroy_nozero(NeoAAArchivePlain plainArchive) {
     NEO_AA_NullParamAssert(plainArchive);
-    neo_aa_archive_item_list_destroy(plainArchive->items, plainArchive->itemCount);
+    neo_aa_archive_item_list_destroy_nozero(plainArchive->items, plainArchive->itemCount);
     free(plainArchive);
 }
 

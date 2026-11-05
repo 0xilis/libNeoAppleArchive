@@ -1,6 +1,6 @@
 buildDir = build
 CC = clang
-CFLAGS += -fPIC -Wall -pedantic -Wextra -I../libNeoAppleArchive -g -fsanitize=address
+CFLAGS += -fPIC -Wall -pedantic -Wextra -I../libNeoAppleArchive -g -fsanitize=address -I/opt/homebrew/opt/openssl@3/include
 
 NEOAPPLEARCHIVE_DIR = ../
 
