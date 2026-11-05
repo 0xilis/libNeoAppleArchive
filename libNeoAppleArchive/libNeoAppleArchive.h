@@ -157,7 +157,9 @@ typedef enum {
 #endif
 
 #include "neo_aa_header.h"
+#ifndef EXCLUDE_AEA_SUPPORT
 #include "neo_aea_archive.h"
+#endif
 
 #ifdef __cplusplus
 }
