@@ -374,7 +374,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
         }
         itemList = itemListNewPtr;
         size_t currentHeaderSize = internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(maxSize, data + position);
-        if (!currentHeaderSize || currentHeaderSize > USHRT_MAX) {
+        if (!currentHeaderSize) {
             /*
              * GHSA-chpv-g239-pp39: Make sure to free remaining items in itemList
              */
