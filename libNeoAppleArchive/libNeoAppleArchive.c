@@ -367,7 +367,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
              * GHSA-chpv-g239-pp39: Make sure to free remaining items in itemList
              */
             if (itemList) {
-                neo_aa_archive_item_list_destroy(itemList, itemCount - 1);
+                neo_aa_archive_item_list_destroy_nozero(itemList, itemCount - 1);
             }
             NEO_AA_ErrorHeapAlloc();
             return NULL;
@@ -378,7 +378,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
             /*
              * GHSA-chpv-g239-pp39: Make sure to free remaining items in itemList
              */
-            neo_aa_archive_item_list_destroy(itemList, itemCount - 1);
+            neo_aa_archive_item_list_destroy_nozero(itemList, itemCount - 1);
             NEO_AA_LogError("failed to get header size\n");
             return NULL;
         }
