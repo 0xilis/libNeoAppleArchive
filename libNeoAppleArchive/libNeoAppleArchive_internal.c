@@ -153,7 +153,7 @@ NEO_INTERNAL_API uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_
     uint32_t fieldCount = header->fieldCount;
     if (!fieldCount) {
         NEO_AA_LogError("header->fieldCount=0\n");
-        return;
+        return 0;
     }
     if (!index) {
         /* Index is 0; this is the first field key */
