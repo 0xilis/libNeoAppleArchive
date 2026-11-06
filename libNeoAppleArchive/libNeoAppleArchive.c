@@ -318,11 +318,7 @@ void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char 
         NEO_AA_LogError("failed to open filepath\n");
         return;
     }
-#if defined(__APPLE__)
-    int fd = fp->_file;
-#else
     int fd = fileno(fp);
-#endif
     neo_aa_archive_plain_writefd(plainArchive, fd);
     fclose(fp);
 }
@@ -442,11 +438,7 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
     fseek(fp, 0, SEEK_END);
     size_t binarySize = ftell(fp);
     fseek(fp, 0, SEEK_SET);
-#if defined(__APPLE__)
-    int fd = fp->_file;
-#else
     int fd = fileno(fp);
-#endif
     if (binarySize > (UINT32_MAX-6) || binarySize < 12) {
         fclose(fp);
         NEO_AA_LogError("AEA over 4GB or under 12 bytes\n");
@@ -867,11 +859,7 @@ void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algor
         NEO_AA_LogError("failed to open path\n");
         return;
     }
-#if defined(__APPLE__)
-    int fd = fp->_file;
-#else
     int fd = fileno(fp);
-#endif
     neo_aa_archive_plain_compress_writefd(plain, algorithm, fd);
     fclose(fp);
 }
