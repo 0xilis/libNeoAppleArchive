@@ -20,7 +20,7 @@
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     if (!header) {
         NEO_AA_LogError("header is NULL\n");
-        return;
+        return NULL;
     }
     NeoAAArchiveItem archiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
     if (!archiveItem) {
