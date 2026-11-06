@@ -18,7 +18,10 @@
 #include <libgen.h>
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
-    NEO_AA_NullParamAssert(header);
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return;
+    }
     NeoAAArchiveItem archiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
     if (!archiveItem) {
         NEO_AA_ErrorHeapAlloc();
@@ -263,7 +266,10 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
 }
 
 uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize) {
-    NEO_AA_NullParamAssert(archive);
+    if (!archive) {
+        NEO_AA_LogError("archive is NULL\n");
+        return 0;
+    }
     /* Ugly slow */
     size_t archiveSize = neo_aa_archive_plain_outfile_size(archive);
     if (!archiveSize) {
@@ -424,7 +430,10 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_encoded_data(size_t encodedSi
 }
 
 NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
-    NEO_AA_NullParamAssert(path);
+    if (!path) {
+        NEO_AA_LogError("path is NULL\n");
+        return NULL;
+    }
     FILE *fp = fopen(path, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
@@ -675,7 +684,10 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
  * supports ZLIB/LZFSE/RAW at the moment.
  */
 NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
-    NEO_AA_NullParamAssert(path);
+    if (!path) {
+        NEO_AA_LogError("path is NULL\n");
+        return NULL;
+    }
     FILE *fp = fopen(path, "rb");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");

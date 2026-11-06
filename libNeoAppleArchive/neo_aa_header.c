@@ -856,7 +856,10 @@ void neo_aa_header_remove_field_at_index(NeoAAHeader header, int keyIndex) {
 }
 
 NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
-    NEO_AA_NullParamAssert(header);
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return NULL;
+    }
     char *encodedData = header->encodedData;
     size_t encodedDataSize = header->headerSize;
     int fieldCount = header->fieldCount;

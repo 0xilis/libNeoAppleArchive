@@ -141,16 +141,28 @@ NEO_INTERNAL_API char internal_do_not_call_neo_aa_header_subtype_for_field_type_
 }
 
 NEO_INTERNAL_API uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index) {
-    NEO_AA_NullParamAssert(header);
-    NEO_AA_NullParamAssert((index >= 0));
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return 0;
+    }
+    if (index < 0) {
+        NEO_AA_LogError("(index < 0) returned valid\n");
+        return 0;
+    }
     size_t headerSize = header->headerSize;
     uint32_t fieldCount = header->fieldCount;
-    NEO_AA_NullParamAssert(fieldCount);
+    if (!fieldCount) {
+        NEO_AA_LogError("header->fieldCount=0\n");
+        return;
+    }
     if (!index) {
         /* Index is 0; this is the first field key */
         return 6;
     }
-    NEO_AA_NullParamAssert((index < (int)fieldCount));
+    if (!(index < (int)fieldCount)) {
+        NEO_AA_LogError("!(index < (int)fieldCount) returned valid\n");
+        return 0;
+    }
     size_t currentPos = 6;
     for (int i = 0; i < index; i++) {
         if (currentPos >= headerSize) {
