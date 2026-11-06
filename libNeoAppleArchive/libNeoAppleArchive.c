@@ -665,7 +665,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             return genericArchive;
         } else {
             /* We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry! */
-            NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry!\n");
+            NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/LZBITMAP/RAW apple archives, sorry!\n");
             return NULL;
         }
     }
