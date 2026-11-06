@@ -67,8 +67,10 @@ void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t
 }
 
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items_nocopy(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
-    NEO_AA_NullParamAssert(itemCount);
+    if (!items || !itemCount) {
+        NEO_AA_LogError("items empty");
+        return NULL;
+    }
     NeoAAArchivePlain plainArchive = malloc(sizeof(struct neo_aa_archive_plain_impl));
     if (!plainArchive) {
         NEO_AA_ErrorHeapAlloc();
@@ -80,8 +82,10 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items_nocopy(NeoAAArchiveItem
 }
 
 NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
-    NEO_AA_NullParamAssert(itemCount);
+    if (!items || !itemCount) {
+        NEO_AA_LogError("items empty");
+        return NULL;
+    }
     NeoAAArchiveItem *copiedItems = malloc(sizeof(NeoAAArchiveItem) * itemCount);
     if (!copiedItems) {
         NEO_AA_ErrorHeapAlloc();
@@ -94,15 +98,20 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         size_t encodedBlobDataSize = archiveItem->encodedBlobDataSize;
         NeoAAArchiveItem copiedArchiveItem = malloc(sizeof(struct neo_aa_archive_item_impl));
         if (!copiedArchiveItem) {
-            free(copiedItems);
+            neo_aa_archive_item_list_destroy_nozero(copiedItems, i);
             NEO_AA_ErrorHeapAlloc();
             return NULL;
         }
         memset(copiedArchiveItem, 0, sizeof(struct neo_aa_archive_item_impl));
         NeoAAHeader copiedHeader = neo_aa_header_clone_header(archiveItem->header);
         if (!copiedHeader) {
+            /*
+             * We have not yet changed copiedArchiveItem->encodedBlobData,
+             * or copiedArchiveItem->header so we need to just free() rather
+             * than calling neo_aa_archive_item_destroy_nozero()
+             */
             free(copiedArchiveItem);
-            free(copiedItems);
+            neo_aa_archive_item_list_destroy_nozero(copiedItems, i);
             NEO_AA_LogError("cloning header in list failed\n");
             return NULL;
         }
@@ -111,8 +120,9 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
         if (encodedBlobDataSize) {
             char *copiedEncodedBlobData = malloc(encodedBlobDataSize);
             if (!copiedEncodedBlobData) {
+                free(copiedHeader);
                 free(copiedArchiveItem);
-                free(copiedItems);
+                neo_aa_archive_item_list_destroy_nozero(copiedItems, i);
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
@@ -128,7 +138,9 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_items(NeoAAArchiveItem *items
 }
 
 void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
+    if (!items) {
+        return;
+    }
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem archiveItem = items[i];
         items[i] = 0;
@@ -145,7 +157,9 @@ void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount) {
 }
 
 void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive) {
-    NEO_AA_NullParamAssert(plainArchive);
+    if (plainArchive) {
+        return;
+    }
     NeoAAArchiveItem *items = plainArchive->items;
     int itemCount = plainArchive->itemCount;
     plainArchive->items = 0;
@@ -155,7 +169,9 @@ void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive) {
 }
 
 void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCount) {
-    NEO_AA_NullParamAssert(items);
+    if (!items) {
+        return;
+    }
     for (int i = 0; i < itemCount; i++) {
         NeoAAArchiveItem archiveItem = items[i];
         neo_aa_header_destroy_nozero(archiveItem->header);
@@ -166,7 +182,9 @@ void neo_aa_archive_item_list_destroy_nozero(NeoAAArchiveItem *items, int itemCo
 }
 
 void neo_aa_archive_plain_destroy_nozero(NeoAAArchivePlain plainArchive) {
-    NEO_AA_NullParamAssert(plainArchive);
+    if (!plainArchive) {
+        return;
+    }
     neo_aa_archive_item_list_destroy_nozero(plainArchive->items, plainArchive->itemCount);
     free(plainArchive);
 }
@@ -237,6 +255,7 @@ void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
     uint8_t *buffer = malloc(archiveSize); /* buffer to write to fd */
     if (neo_aa_archive_plain_write_buffer(plainArchive, buffer)) {
         NEO_AA_LogError("neo_aa_archive_plain_write_buffer failed\n");
+        free(buffer);
         return;
     }
     write(fd, buffer, archiveSize);
@@ -265,6 +284,7 @@ uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t
         NeoAAHeader header = item->header;
         if (!header) {
             NEO_AA_LogError("item does not hold a header\n");
+            free(buffer);
             return 0;
         }
         neo_aa_archive_item_write_to_buffer(item, buffer + offset);
@@ -279,8 +299,14 @@ uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t
 }
 
 void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char *filepath) {
-    NEO_AA_NullParamAssert(plainArchive);
-    NEO_AA_NullParamAssert(filepath);
+    if (!plainArchive) {
+        NEO_AA_LogError("plainArchive is NULL\n");
+        return;
+    }
+    if (!filepath) {
+        NEO_AA_LogError("filepath is NULL\n");
+        return;
+    }
     FILE *fp = fopen(filepath, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
@@ -296,6 +322,9 @@ void neo_aa_archive_plain_write_path(NeoAAArchivePlain plainArchive, const char 
 }
 
 void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
+    if (!item) {
+        return;
+    }
     NeoAAHeader header = item->header;
     item->header = 0;
     neo_aa_header_destroy(header);
@@ -309,6 +338,9 @@ void neo_aa_archive_item_destroy(NeoAAArchiveItem item) {
 }
 
 void neo_aa_archive_item_destroy_nozero(NeoAAArchiveItem item) {
+    if (!item) {
+        return;
+    }
     neo_aa_header_destroy_nozero(item->header);
     free(item->encodedBlobData);
     free(item);
@@ -418,13 +450,12 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
         return NULL;
     }
     ssize_t bytesRead = read(fd, data, binarySize);
+    fclose(fp);
     if ((size_t)bytesRead < binarySize) {
-        fclose(fp);
         free(data);
         NEO_AA_LogError("failed to read entire file\n");
         return NULL;
     }
-    fclose(fp);
     NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(binarySize, data);
     free(data);
     return plainArchive;
@@ -559,12 +590,11 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             size_t compressedSize = FLIP_32(*((uint32_t *)(data + 0x18)));
             /* uncompressed size of aar is stored at 0x10 in binary */
             size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
-            uint8_t *encodedRAWData = malloc(uncompressedSize);
+            uint8_t *encodedRAWData = calloc(1, uncompressedSize);
             if (!encodedRAWData) {
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
-            memset(encodedRAWData, 0, uncompressedSize);
             /* check for error codes later */
             internal_do_not_call_inflate(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
             NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
@@ -706,6 +736,7 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         NeoAAHeader header = item->header;
         if (!header) {
             NEO_AA_LogError("item does not hold a header\n");
+            free(buffer);
             return 0;
         }
         neo_aa_archive_item_write_to_buffer(item, buffer + offset);
@@ -716,6 +747,7 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         uint8_t *compressed = malloc(archiveSize + 100);
         if (!compressed) {
             NEO_AA_LogError("not enough memory to compress\n");
+            free(buffer);
             return 0;
         }
         memset(compressed, 0, archiveSize + 100);
@@ -741,6 +773,7 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         uint8_t *compressed = malloc(archiveSize + 100);
         if (!compressed) {
             NEO_AA_LogError("not enough memory to compress\n");
+            free(buffer);
             return 0;
         }
         memset(compressed, 0, archiveSize + 100);
@@ -774,6 +807,7 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         uint8_t *compressed = malloc(archiveSize + 100);
         if (!compressed) {
             NEO_AA_LogError("not enough memory to compress\n");
+            free(buffer);
             return 0;
         }
         memset(compressed, 0, archiveSize + 100);
@@ -808,8 +842,14 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
 }
 
 void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algorithm, const char *path) {
-    NEO_AA_NullParamAssert(plain);
-    NEO_AA_NullParamAssert(path);
+    if (plain) {
+        NEO_AA_LogError("plain is NULL\n");
+        return;
+    }
+    if (path) {
+        NEO_AA_LogError("path is NULL\n");
+        return;
+    }
     FILE *fp = fopen(path, "w");
     if (!fp) {
         NEO_AA_LogError("failed to open path\n");
