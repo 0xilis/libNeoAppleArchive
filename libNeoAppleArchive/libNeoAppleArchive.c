@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <libgen.h>
+#include "compression/lzraven/lzraven.h"
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     if (!header) {
@@ -596,8 +597,20 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
-            /* check for error codes later */
-            internal_do_not_call_inflate(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
+            /*
+             * TODO:
+             *
+             * Currently we only check totalOut if it completely failed,
+             * but eventually we do want to later check it against
+             * compressedSize. This *should* currently not be a big
+             * problem at the moment currently, since no overflow possible.
+             */
+            int totalOut = internal_do_not_call_inflate(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
+            if (totalOut == -1) {
+                free(encodedRAWData);
+                NEO_AA_LogError("failed to decompress ZLIB data\n");
+                return NULL;
+            }
             NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
             free(encodedRAWData);
             if (!plainArchive) {
@@ -655,9 +668,51 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             genericArchive->uncompressedSize = uncompressedSize;
             genericArchive->compressedSize = compressedSize;
             return genericArchive;
+        } else if (compressionType == 'm') {
+            /* type is LZRAVEN (formerly known as LZMAMMOTH */
+            /* compressed size of aar is stored at 0x18 in binary */
+            size_t compressedSize = FLIP_32(*((uint32_t *)(data + 0x18)));
+            /* uncompressed size of aar is stored at 0x10 in binary */
+            size_t uncompressedSize = FLIP_32(*((uint32_t *)(data + 0x10)));
+            uint8_t *encodedRAWData = calloc(1, uncompressedSize);
+            if (!encodedRAWData) {
+                NEO_AA_ErrorHeapAlloc();
+                return NULL;
+            }
+            /*
+             * TODO:
+             *
+             * Currently we only check totalOut if it completely failed,
+             * but eventually we do want to later check it against
+             * compressedSize. This *should* currently not be a big
+             * problem at the moment currently, since no overflow possible.
+             */
+            size_t totalOut = lzraven_decode_buffer(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
+            if (!totalOut) {
+                free(encodedRAWData);
+                NEO_AA_LogError("failed to decompress LZRAVEN data\n");
+                return NULL;
+            }
+            NeoAAArchivePlain plainArchive = neo_aa_archive_plain_create_with_encoded_data(uncompressedSize, encodedRAWData);
+            free(encodedRAWData);
+            if (!plainArchive) {
+                /* Failed to create plain archive, return NULL. */
+                return NULL;
+            }
+            NeoAAArchiveGeneric genericArchive = malloc(sizeof(struct neo_aa_archive_generic_impl));
+            if (!genericArchive) {
+                /* Not enough space to create the generic archive. */
+                neo_aa_archive_plain_destroy_nozero(plainArchive);
+                NEO_AA_LogError("not enough space to create NeoAAArchiveGeneric\n");
+                return NULL;
+            }
+            genericArchive->raw = plainArchive;
+            genericArchive->compression = NEO_AA_COMPRESSION_LZRAVEN;
+            genericArchive->uncompressedSize = uncompressedSize;
+            genericArchive->compressedSize = compressedSize;
         } else {
-            /* We currently don't support non ZLIB/LZFSE/RAW apple archives, sorry! */
-            NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/LZBITMAP/RAW apple archives, sorry!\n");
+            /* We currently don't support non ZLIB/LZFSE/LZBITMAP/LZRAVEN/RAW apple archives, sorry! */
+            NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/LZBITMAP/LZRAVEN/RAW apple archives, sorry!\n");
             return NULL;
         }
     }
@@ -672,8 +727,8 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
  * This converts it to NeoAAArchiveGeneric,
  * which handles all compression types of
  * .aar, including uncompressed.
- * Well, it *will*... currently it only
- * supports ZLIB/LZFSE/RAW at the moment.
+ * Well, it *will*... currently it only supports
+ * ZLIB/LZFSE/LZBITMAP/LZRAVEN/RAW at the moment.
  */
 NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
     if (!path) {
@@ -840,6 +895,12 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         /* Go back to header since this is the pointer malloc gave us */
         free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
         return 1;
+    } else if (NEO_AA_COMPRESSION_LZRAVEN == algorithm) {
+        /*
+         * TODO: Make LZRAVEN implementation
+         */
+        NEO_AA_LogError("LZRAVEN/LZMAMMOTH currently only supported on decompression, sorry\n");
+        return 0;
     }
     NEO_AA_LogError("this algorithm is currently not supported\n");
     return 0;

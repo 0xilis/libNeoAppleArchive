@@ -25,6 +25,8 @@ output: $(buildDir) $(libzbitmapBuildDir)
 	$(MAKE) -C $(LIBZBITMAP_DIR)
 	mv $(LIBZBITMAP_DIR)/libzbitmap.a build/libzbitmap/lib/
 	cp $(LIBZBITMAP_DIR)/libzbitmap.h build/libzbitmap/include/
+	@echo "building lzraven..."
+	@$(CC) -c libNeoAppleArchive/compression/lzraven/lzraven.c -o build/obj/lzraven.o $(CFLAGS)
 	@ # Build libNeoAppleArchive.a
 	@echo "building libNeoAppleArchive..."
 	@$(CC) -c libNeoAppleArchive/neo_aa_header.c -o build/obj/neo_aa_header.o $(CFLAGS)

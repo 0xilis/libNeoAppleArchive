@@ -30,4 +30,6 @@ If the end result is compressed under ZLIB ends up having the same compressedSiz
 
 [zlib](https://zlib.net/) is not linked in the final library but is rather dynamically linked, as it is assumed to already be available on the OS itself.
 
+[lzraven](https://github.com/retrowave3/apple-compressions) is an MIT-licensed open source reimplementation of LZRAVEN (formerly known as LZMAMMOTH). The license is placed in 'compression/lzraven/LICENSE' and the code is stored on this repository.
+
 OS X and Linux are constantly tested to ensure they work, however mingw is not always tested on the latest commit. If you cannot get mingw to build libNeoAppleArchive, please report an issue and try seeing if an older commit works.

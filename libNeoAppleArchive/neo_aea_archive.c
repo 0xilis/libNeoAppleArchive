@@ -23,6 +23,7 @@
 #pragma clang diagnostic pop
 #include <libzbitmap.h>
 #include <zlib.h>
+#include "compression/lzraven/lzraven.h"
 #include <assert.h>
 #include <openssl/aes.h>
 #include <openssl/kdf.h>
@@ -1101,6 +1102,7 @@ uint8_t *neo_aea_extract_data(
              * f = LZVN
              * x = LZMA
              * z = ZLIB
+             * m = LZRAVEN
              */
 
             /* 
@@ -1158,6 +1160,10 @@ uint8_t *neo_aea_extract_data(
                     free(aeaData);
                     return NULL;
                 }
+            } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZRAVEN) {
+                NEO_AA_LogError("Compression algorithm LZRAVEN not yet for AEA, but likely will be in the next build.\n");
+                free(aeaData);
+                return NULL;
             } else {
                 /* Not yet supported */
                 NEO_AA_LogErrorF("Compression algorithm '%c' not yet supported\n", compressionAlgo);

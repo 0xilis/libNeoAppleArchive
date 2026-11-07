@@ -57,6 +57,7 @@ typedef enum {
     NEO_AEA_COMPRESSION_LZVN = 'f',
     NEO_AEA_COMPRESSION_LZMA = 'x',
     NEO_AEA_COMPRESSION_ZLIB = 'z',
+    NEO_AEA_COMPRESSION_LZRAVEN = 'm',
 } NeoAEACompressionTypes;
 
 #define MAIN_KEY_INFO                            "AEA_AMK"
