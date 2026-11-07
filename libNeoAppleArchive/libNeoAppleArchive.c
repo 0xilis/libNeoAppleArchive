@@ -687,7 +687,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
              * compressedSize. This *should* currently not be a big
              * problem at the moment currently, since no overflow possible.
              */
-            size_t totalOut = lzraven_decode_buffer(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
+            size_t totalOut = lzraven_decode_buffer(encodedRAWData, (size_t)uncompressedSize, data + 0x1C, (size_t)compressedSize);
             if (!totalOut) {
                 free(encodedRAWData);
                 NEO_AA_LogError("failed to decompress LZRAVEN data\n");
@@ -710,6 +710,7 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
             genericArchive->compression = NEO_AA_COMPRESSION_LZRAVEN;
             genericArchive->uncompressedSize = uncompressedSize;
             genericArchive->compressedSize = compressedSize;
+            return genericArchive;
         } else {
             /* We currently don't support non ZLIB/LZFSE/LZBITMAP/LZRAVEN/RAW apple archives, sorry! */
             NEO_AA_LogError("We currently don't support non ZLIB/LZFSE/LZBITMAP/LZRAVEN/RAW apple archives, sorry!\n");
