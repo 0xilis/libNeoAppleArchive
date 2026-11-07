@@ -597,16 +597,8 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
-            /*
-             * TODO:
-             *
-             * Currently we only check totalOut if it completely failed,
-             * but eventually we do want to later check it against
-             * compressedSize. This *should* currently not be a big
-             * problem at the moment currently, since no overflow possible.
-             */
             int totalOut = internal_do_not_call_inflate(data + 0x1C, (int)compressedSize, encodedRAWData, (int)uncompressedSize);
-            if (totalOut == -1) {
+            if ((size_t)totalOut != uncompressedSize || totalOut == -1) {
                 free(encodedRAWData);
                 NEO_AA_LogError("failed to decompress ZLIB data\n");
                 return NULL;
@@ -679,16 +671,8 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_encoded_data(size_t encodedSize,
                 NEO_AA_ErrorHeapAlloc();
                 return NULL;
             }
-            /*
-             * TODO:
-             *
-             * Currently we only check totalOut if it completely failed,
-             * but eventually we do want to later check it against
-             * compressedSize. This *should* currently not be a big
-             * problem at the moment currently, since no overflow possible.
-             */
             size_t totalOut = lzraven_decode_buffer(encodedRAWData, (size_t)uncompressedSize, data + 0x1C, (size_t)compressedSize);
-            if (!totalOut) {
+            if (totalOut != uncompressedSize || !totalOut) {
                 free(encodedRAWData);
                 NEO_AA_LogError("failed to decompress LZRAVEN data\n");
                 return NULL;
