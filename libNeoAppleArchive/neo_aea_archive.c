@@ -1222,9 +1222,18 @@ uint8_t *neo_aea_extract_data(
                     return NULL;
                 }
             } else if (compressionAlgo == NEO_AEA_COMPRESSION_LZRAVEN) {
-                NEO_AA_LogError("Compression algorithm LZRAVEN not yet for AEA, but likely will be in the next build.\n");
-                free(aeaData);
-                return NULL;
+                /* LZRAVEN compressed */
+                decompressedBytes = lzraven_decode_buffer(
+                    &aeaData[dataOffset], 
+                    curSegmentHeader->originalSize, 
+                    curSegmentHeader->segmentData, 
+                    curSegmentHeader->compressedSize
+                );
+                if (decompressedBytes != curSegmentHeader->originalSize) {
+                    NEO_AA_LogError("Failed to decompress LZRAVEN data\n");
+                    free(aeaData);
+                    return NULL;
+                }
             } else {
                 /* Not yet supported */
                 NEO_AA_LogErrorF("Compression algorithm '%c' not yet supported\n", compressionAlgo);
