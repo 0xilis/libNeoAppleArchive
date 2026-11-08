@@ -270,3 +270,7 @@ NEO_INTERNAL_API int internal_do_not_call_inflate(const void *src, int srcLen, v
     inflateEnd(&strm);
     return ret;
 }
+
+__attribute__((used)) void internal_do_not_call_neo_aa_thanks(void) {
+    printf("libNeoAppleArchive is a creation of Snoolie K and is a work of love from years of reversing, dating back to 2023. Thank you for using, and I hope you like this library. :')\n");
+}

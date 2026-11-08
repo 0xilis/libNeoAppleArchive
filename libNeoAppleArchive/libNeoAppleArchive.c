@@ -919,11 +919,11 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
 }
 
 void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algorithm, const char *path) {
-    if (plain) {
+    if (!plain) {
         NEO_AA_LogError("plain is NULL\n");
         return;
     }
-    if (path) {
+    if (!path) {
         NEO_AA_LogError("path is NULL\n");
         return;
     }
