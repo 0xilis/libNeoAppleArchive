@@ -881,11 +881,38 @@ int neo_aa_archive_plain_compress_writefd(NeoAAArchivePlain plain, int algorithm
         free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
         return 1;
     } else if (NEO_AA_COMPRESSION_LZRAVEN == algorithm) {
-        /*
-         * TODO: Make LZRAVEN implementation
-         */
-        NEO_AA_LogError("LZRAVEN/LZMAMMOTH currently only supported on decompression, sorry\n");
-        return 0;
+        /* TODO: This code sucks. */
+        uint8_t *compressed = malloc(archiveSize + 100);
+        if (!compressed) {
+            NEO_AA_LogError("not enough memory to compress\n");
+            free(buffer);
+            return 0;
+        }
+        memset(compressed, 0, archiveSize + 100);
+
+        struct neo_pbzx_archived_directory_header *ptr = (struct neo_pbzx_archived_directory_header *)compressed;
+        ptr->magic = PBZM_MAGIC;
+        ptr->mystery = 0x40;
+        ptr->uncompressedSize = FLIP_32((uint32_t)archiveSize);
+
+        /* Skip past header */
+        compressed += sizeof(struct neo_pbzx_archived_directory_header);
+
+        size_t compressedSize = lzraven_encode_buffer(compressed, (archiveSize + 100) - sizeof(struct neo_pbzx_archived_directory_header), (uint8_t *)buffer, archiveSize);
+        if (!compressedSize) {
+            NEO_AA_LogError("compressedSize==0\n");
+            free(buffer);
+            free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
+            return 0;
+        }
+
+        ptr->compressedSize = FLIP_32((uint32_t)compressedSize);
+        free(buffer);
+
+        write(fd, compressed - sizeof(struct neo_pbzx_archived_directory_header), compressedSize + sizeof(struct neo_pbzx_archived_directory_header));
+        /* Go back to header since this is the pointer malloc gave us */
+        free(compressed - sizeof(struct neo_pbzx_archived_directory_header));
+        return 1;
     }
     NEO_AA_LogError("this algorithm is currently not supported\n");
     return 0;

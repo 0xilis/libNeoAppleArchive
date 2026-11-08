@@ -50,6 +50,7 @@ int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dst
 #define PBZE_MAGIC 0x657A6270 /* LZFSE */
 #define PBZB_MAGIC 0x627A6270 /* LZBITMAP */
 #define PBZZ_MAGIC 0x7A7A6270 /* ZLIB */
+#define PBZM_MAGIC 0x6D7A6270 /* LZRAVEN */
 
 #define NEO_INTERNAL_API __attribute__((visibility ("hidden"))) 
 
