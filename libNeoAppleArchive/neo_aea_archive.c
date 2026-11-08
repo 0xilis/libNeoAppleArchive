@@ -74,6 +74,21 @@ NEO_INTERNAL_API int alloc_memcpy(void** dst, void* src, size_t n) {
     return 1;
 }
 
+NEO_INTERNAL_API int alloc_memcpy_bounds(void** dst, void* src, size_t n, void *start, size_t bufSize) {
+    size_t posInBuf = (const unsigned char*)src - (const unsigned char*)start;
+    /* checking both posInBuf and posInBuf+n just in case +n has us overflow */
+    if (posInBuf + n > bufSize || posInBuf > bufSize) {
+        NEO_AA_LogError("size goes past buffer bounds\n");
+        return 0;
+    }
+    *dst = malloc(n);
+    if (!*dst) {
+        return 0;
+    }
+    memcpy(*dst, src, n);
+    return 1;
+}
+
 NEO_INTERNAL_API static void *hmac_derive(void *hkdf_key, void *data1, size_t data1Len, void *data2, size_t data2Len) {
     uint8_t *hmac = malloc(HMacSHA256Size);
     if (!hmac) {
@@ -575,15 +590,24 @@ NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t enco
         NEO_AA_ErrorHeapAlloc();
         return 0;
     }
+    if (encodedDataSize < 12) {
+        NEO_AA_LogError("encodedDataSize too small\n");
+        return 0;
+    }
     memcpy(aea, encodedData, 12);
     uint8_t *buf = encodedData + 12;
     void *data = NULL;
-    if (!alloc_memcpy(&data, buf, aea->authDataSize)) {
+    size_t authDataSize = aea->authDataSize;
+    if (encodedDataSize < 12 + authDataSize) {
+        NEO_AA_LogError("encodedDataSize too small\n");
+        return 0;
+    }
+    if (!alloc_memcpy(&data, buf, authDataSize)) {
 	free(aea);
         return NULL;
     }
     aea->authData = data;
-    buf += aea->authDataSize;
+    buf += authDataSize;
     size_t size;
     switch (aea->profileID) {
         case NEO_AEA_PROFILE_HKDF_SHA256_HMAC_NONE_ECDSA_P256:
@@ -596,6 +620,11 @@ NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t enco
         default:
             size = 0;
             break;
+    }
+    size_t maxEncodedSize = 12 + authDataSize + size;
+    if (encodedDataSize < maxEncodedSize) {
+        NEO_AA_LogError("encodedDataSize too small\n");
+        return 0;
     }
     if (!alloc_memcpy(&data, buf, size)) {
         free(aea);
@@ -615,6 +644,11 @@ NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t enco
             size = 0;
             break;
     }
+    maxEncodedSize += size;
+    if (encodedDataSize < maxEncodedSize + 0x90) {
+        NEO_AA_LogError("encodedDataSize too small\n");
+        return 0;
+    }
     if (!alloc_memcpy(&data, buf, size)) {
         free(aea);
         return NULL;
@@ -626,7 +660,7 @@ NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t enco
     aea->clusterDataLen = encodedDataSize - (buf - encodedData);
     // EXPENSIVE: copies all clusters
     if (IS_ENCRYPTED(aea->profileID)) {
-        if (!alloc_memcpy(&data, buf, aea->clusterDataLen)) {
+        if (!alloc_memcpy_bounds(&data, buf, aea->clusterDataLen, encodedData, encodedDataSize)) {
             free(aea);
             return NULL;
         }
@@ -662,7 +696,7 @@ NeoAEAArchive neo_aea_with_encoded_data_nocopy(uint8_t *encodedData, size_t enco
                 struct aea_segment_header* segment = &cluster.segments[j];
                 // EXPENSIVE -- up to 1 MB copied per segment!
                 void* tmp;
-                alloc_memcpy(&tmp, &buf[off], segment->compressedSize);
+                alloc_memcpy_bounds(&tmp, &buf[off], segment->compressedSize, encodedData, encodedDataSize);
                 segment->segmentData = tmp;
                 // all fields in segment are now fully setup, we can move to next segment
                 off += segment->compressedSize; // segment data
