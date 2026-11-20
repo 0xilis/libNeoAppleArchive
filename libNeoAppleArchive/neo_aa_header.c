@@ -16,8 +16,12 @@ NeoAAHeader neo_aa_header_create(void) {
         return NULL;
     }
     memset(header, 0, sizeof(struct neo_aa_header_impl));
-    size_t default_header_size = 6;
-    char *headerData = malloc(default_header_size + 1);
+    char *headerData = calloc(1, 7); /* 7 is the default header size (6) plus 1 */
+    if (!headerData) {
+        free(header);
+        NEO_AA_ErrorHeapAlloc();
+        return NULL;
+    }
     strcpy(headerData, "AA01");
     headerData[4] = 6; /* 6 bytes long on creation */
     headerData[5] = 0;
@@ -115,7 +119,12 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         NEO_AA_ErrorHeapAlloc();
         return NULL;
     }
-    char *headerData = malloc(encodedSize);
+    char *headerData = calloc(1, encodedSize);
+    if (!headerData) {
+        free(header);
+        NEO_AA_ErrorHeapAlloc();
+        return NULL;
+    }
     memcpy(headerData, data, encodedSize);
     header->encodedData = headerData;
     header->headerSize = encodedSize;
@@ -174,7 +183,7 @@ NeoAAHeader neo_aa_header_create_with_encoded_data(size_t encodedSize, uint8_t *
         if (!fieldKeyValues) {
             free(oldPtr);
             NEO_AA_ErrorHeapAlloc();
-            return NULL;
+            goto free_all;
         }
         
         char *currentPointer = headerData + currentPos;
@@ -384,6 +393,10 @@ NEO_INTERNAL_API static void neo_aa_header_add_field_uint_or_blob(NeoAAHeader he
     NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize));
     size_t oldSize = header->headerSize;
     size_t newSize = oldSize + 4 + fieldSize;
+    if (newSize > UINT16_MAX) {
+        NEO_AA_LogError("header exceeds maximum encoded size\n");
+        return;
+    }
     char *encodedData = header->encodedData;
     uint32_t fieldCount = header->fieldCount;
     char *newEncodedData = realloc(encodedData, newSize);
@@ -678,6 +691,10 @@ NEO_INTERNAL_API static void neo_aa_header_add_field_timespec(NeoAAHeader header
     NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize));
     size_t oldSize = header->headerSize;
     size_t newSize = oldSize + 4 + fieldSize;
+    if (newSize > UINT16_MAX) {
+        NEO_AA_LogError("header exceeds maximum encoded size\n");
+        return;
+    }
     char *encodedData = header->encodedData;
     uint32_t fieldCount = header->fieldCount;
     char *newEncodedData = realloc(encodedData, newSize);

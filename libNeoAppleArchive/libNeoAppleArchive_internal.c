@@ -15,12 +15,18 @@ NEO_INTERNAL_API uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
 
 
 NEO_INTERNAL_API char *internal_do_not_call_memrchr(char *s, int c, size_t n) {
-    uint64_t i = n;
-internal_do_not_call_memrchr_fast_loop:
-    i--;
-    if (s[i] == c) {return (s+i);};
-    if (i != 0) {goto internal_do_not_call_memrchr_fast_loop;};
-    /* Error, return NULL */
+    if (!s || n == 0) {
+        return NULL;
+    }
+
+    while (n > 0) {
+        n--;
+
+        if ((unsigned char)s[n] == (unsigned char)c) {
+            return s + n;
+        }
+    }
+
     return NULL;
 }
 
@@ -28,9 +34,19 @@ NEO_INTERNAL_API void internal_do_not_call_apply_xattr_blob_to_fd(uint8_t *blob,
 #if defined(__APPLE__) || defined(__linux__)
     uint32_t blobPosition = 0;
     while (blobPosition < blobSize) {
+        size_t remaining = blobSize - blobPosition;
+        if (remaining < sizeof(uint32_t)) {
+            NEO_AA_LogError("Incomplete XAT item size\n");
+            return;
+        }
         uint8_t *currentXAT = blob + blobPosition;
-        uint32_t *xatItemSizePtr = *(uint32_t **)&currentXAT;
-        uint32_t xatItemSize = *xatItemSizePtr;
+        uint32_t xatItemSize;
+        memcpy(&xatItemSize, currentXAT, sizeof(xatItemSize));
+
+        if (xatItemSize < 5 || (size_t)xatItemSize > remaining) {
+            NEO_AA_LogError("Invalid XAT item size\n");
+            return;
+        }
         if ((blobPosition + xatItemSize) > blobSize) {
             /* I'm not sure if libAppleArchive itself does this, but rather than erroring we attempt to fix it. */
             /* Some problems may arrive if XAT blob is over 4GB but that will probably never happen. */

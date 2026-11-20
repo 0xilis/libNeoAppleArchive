@@ -161,7 +161,7 @@ void neo_aa_archive_item_list_destroy(NeoAAArchiveItem *items, int itemCount) {
 }
 
 void neo_aa_archive_plain_destroy(NeoAAArchivePlain plainArchive) {
-    if (plainArchive) {
+    if (!plainArchive) {
         return;
     }
     NeoAAArchiveItem *items = plainArchive->items;
@@ -208,6 +208,24 @@ size_t neo_aa_archive_plain_outfile_size(NeoAAArchivePlain plainArchive) {
     }
     return outfileSize;
 }
+
+#include 0 /* TODO: Not yet complete */
+uint64_t neo_aa_archive_plain_outfile_size64(NeoAAArchivePlain plainArchive) {
+    uint64_t outfileSize = 0;
+    int itemCount = plainArchive->itemCount;
+    NeoAAArchiveItem *items = plainArchive->items;
+    for (int i = 0; i < itemCount; i++) {
+        NeoAAArchiveItem item = items[i];
+        NeoAAHeader header = item->header;
+        if (!header) {
+            NEO_AA_LogError("item does not have header\n");
+            return 0;
+        }
+        outfileSize += (header->headerSize + item->encodedBlobDataSize);
+    }
+    return outfileSize;
+}
+#endif
 
 void neo_aa_archive_item_write_to_buffer(NeoAAArchiveItem item, char *buffer) {
     NeoAAHeader header = item->header;
@@ -431,14 +449,26 @@ NeoAAArchivePlain neo_aa_archive_plain_create_with_aar_path(const char *path) {
         NEO_AA_LogError("path is NULL\n");
         return NULL;
     }
-    FILE *fp = fopen(path, "w");
+    FILE *fp = fopen(path, "rb");
     if (!fp) {
         NEO_AA_LogError("failed to open filepath\n");
         return NULL;
     }
-    fseek(fp, 0, SEEK_END);
-    size_t binarySize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    if (fseeko(fp, 0, SEEK_END) != 0) {
+        NEO_AA_LogError("reached SEEK_END\n");
+        fclose(fp);
+        return NULL;
+    }
+
+    off_t fileSize = ftello(fp);
+
+    if (fileSize < 0 || fseeko(fp, 0, SEEK_SET) != 0) {
+        NEO_AA_LogError("file size is smaller\n");
+        fclose(fp);
+        return NULL;
+    }
+
+    uint64_t binarySize = (uint64_t)fileSize;
     int fd = fileno(fp);
     if (binarySize > (UINT32_MAX-6) || binarySize < 12) {
         fclose(fp);
@@ -725,9 +755,18 @@ NeoAAArchiveGeneric neo_aa_archive_generic_from_path(const char *path) {
         NEO_AA_LogError("failed to open filepath\n");
         return NULL;
     }
-    fseek(fp, 0, SEEK_END);
-    size_t binarySize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    if (fseeko(fp, 0, SEEK_END) != 0) {
+        NEO_AA_LogError("reached SEEK_END\n");
+        fclose(fp);
+        return NULL;
+    }
+    off_t fileSize = ftello(fp);
+    if (fileSize < 0 || fseeko(fp, 0, SEEK_SET) != 0) {
+        NEO_AA_LogError("file size is smaller\n");
+        fclose(fp);
+        return NULL;
+    }
+    uint64_t binarySize = (uint64_t)fileSize;
     if (binarySize < 6) {
         /* Compressed or uncompressed, a .aar *cannot* be less than 6 bytes. */
         fclose(fp);
@@ -939,9 +978,7 @@ void neo_aa_archive_plain_compress_write_path(NeoAAArchivePlain plain, int algor
 
 /* TODO: Experimental */
 /* Recursively archive directory contents */
-NEO_INTERNAL_API static int add_directory_contents_to_archive(const char *dirPath, NeoAAArchiveItem *items, 
-                                          size_t *itemsCount, size_t *itemsMalloc,
-                                          const char *basePath) {
+NEO_INTERNAL_API static int add_directory_contents_to_archive(const char *dirPath, NeoAAArchiveItem *items, size_t *itemsCount, size_t *itemsMalloc, const char *basePath) {
     DIR *dir = opendir(dirPath);
     if (!dir) {
         NEO_AA_LogErrorF("Failed to open directory: %s\n", dirPath);
@@ -1128,9 +1165,18 @@ NEO_INTERNAL_API static NeoAAArchivePlain internal_do_not_call_wrap_file_in_neo_
         NEO_AA_LogError("Failed to open input path\n");
         return NULL;
     }
-    fseek(fp, 0, SEEK_END);
-    size_t binarySize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    if (fseeko(fp, 0, SEEK_END) != 0) {
+        NEO_AA_LogError("reached SEEK_END\n");
+        fclose(fp);
+        return NULL;
+    }
+    off_t fileSize = ftello(fp);
+    if (fileSize < 0 || fseeko(fp, 0, SEEK_SET) != 0) {
+        NEO_AA_LogError("file size is smaller\n");
+        fclose(fp);
+        return NULL;
+    }
+    uint64_t binarySize = (uint64_t)fileSize;
     /* allocate our uncompressed data */
     uint8_t *data = malloc(binarySize);
     if (!data) {
@@ -1226,9 +1272,18 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
         NEO_AA_LogError("failed to find path\n");
         return -1;
     }
-    fseek(fp, 0, SEEK_END);
-    size_t appleArchiveSize = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    if (fseeko(fp, 0, SEEK_END) != 0) {
+        NEO_AA_LogError("reached SEEK_END\n");
+        fclose(fp);
+        return NULL;
+    }
+    off_t fileSize = ftello(fp);
+    if (fileSize < 0 || fseeko(fp, 0, SEEK_SET) != 0) {
+        NEO_AA_LogError("file size is smaller\n");
+        fclose(fp);
+        return NULL;
+    }
+    uint64_t appleArchiveSize = (uint64_t)fileSize;
     uint8_t *appleArchive = malloc(appleArchiveSize);
     if (!appleArchive) {
         NEO_AA_LogError("failed to load appleArchive into memory\n");
