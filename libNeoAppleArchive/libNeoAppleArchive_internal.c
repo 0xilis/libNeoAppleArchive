@@ -7,6 +7,7 @@
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
+#include "neo_aa_stream.h"
 #include <zlib.h>
 
 NEO_INTERNAL_API uint32_t internal_do_not_call_flip_edian_32(uint32_t num) {
@@ -285,6 +286,70 @@ NEO_INTERNAL_API int internal_do_not_call_inflate(const void *src, int srcLen, v
 
     inflateEnd(&strm);
     return ret;
+}
+
+#define NEO_AA_STREAM_BUFFER_SIZE (1024 * 1024)
+
+NEO_INTERNAL_API int internal_do_not_call_inflate_stream(FILE *src, FILE *dst, uint64_t compressedSize) {
+    z_stream strm = {0};
+    uint8_t *inBuffer = malloc(NEO_AA_STREAM_BUFFER_SIZE);
+    uint8_t *outBuffer = malloc(NEO_AA_STREAM_BUFFER_SIZE);
+
+    if (!inBuffer || !outBuffer) {
+        free(inBuffer);
+        free(outBuffer);
+        return -1;
+    }
+
+    if (inflateInit2(&strm, 15 + 32) != Z_OK) {
+        free(inBuffer);
+        free(outBuffer);
+        return -1;
+    }
+
+    uint64_t remaining = compressedSize;
+    int result = -1;
+    int status = Z_OK;
+
+    while (remaining > 0 && status != Z_STREAM_END) {
+        size_t amount = remaining > NEO_AA_STREAM_BUFFER_SIZE ? NEO_AA_STREAM_BUFFER_SIZE : (size_t)remaining;
+
+        if (neo_aa_read_exact(src, inBuffer, amount)) {
+            goto cleanup;
+        }
+
+        remaining -= amount;
+
+        strm.next_in = inBuffer;
+        strm.avail_in = (uInt)amount;
+
+        while (strm.avail_in > 0 && status != Z_STREAM_END) {
+            strm.next_out = outBuffer;
+            strm.avail_out = NEO_AA_STREAM_BUFFER_SIZE;
+
+            status = inflate(&strm, Z_NO_FLUSH);
+
+            if (status != Z_OK && status != Z_STREAM_END) {
+                goto cleanup;
+            }
+
+            size_t produced = NEO_AA_STREAM_BUFFER_SIZE - strm.avail_out;
+
+            if (produced && fwrite(outBuffer, 1, produced, dst) != produced) {
+                goto cleanup;
+            }
+        }
+    }
+
+    if (status == Z_STREAM_END) {
+        result = 0;
+    }
+
+cleanup:
+    inflateEnd(&strm);
+    free(inBuffer);
+    free(outBuffer);
+    return result;
 }
 
 __attribute__((used)) void internal_do_not_call_neo_aa_thanks(void) {

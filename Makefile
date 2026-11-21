@@ -31,6 +31,7 @@ output: $(buildDir) $(libzbitmapBuildDir)
 	@echo "building libNeoAppleArchive..."
 	@$(CC) -c libNeoAppleArchive/neo_aa_header.c -o build/obj/neo_aa_header.o $(CFLAGS)
 	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive_internal.c -o build/obj/libNeoAppleArchive_internal.o $(CFLAGS)
+	@$(CC) -c libNeoAppleArchive/neo_aa_stream.c -o build/obj/neo_aa_stream.o $(CFLAGS)
 	@$(CC) -c libNeoAppleArchive/libNeoAppleArchive.c -o build/obj/libNeoAppleArchive.o $(CFLAGS)
 	@if [ "$(EXCLUDE_AEA_SUPPORT)" != "1" ]; then \
 		$(CC) -c libNeoAppleArchive/neo_aea_archive.c -o build/obj/neo_aea_archive.o $(CFLAGS); \

@@ -43,6 +43,11 @@ char internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(uint32_t
 uint64_t internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(NeoAAHeader header, int index);
 size_t internal_do_not_call_neo_aa_archive_item_encoded_data_size_for_encoded_data(size_t maxSize, uint8_t *data);
 int internal_do_not_call_inflate(const void *src, int srcLen, void *dst, int dstLen);
+int internal_do_not_call_inflate_stream(FILE *src, FILE *dst, uint64_t compressedSize);
+
+int neo_aa_header_set_field_uint_err(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value); /* from neo_aa_header.c */
+int neo_aa_header_set_field_blob_err(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize); /* from neo_aa_header.c */
+int neo_aa_header_set_field_string_err(NeoAAHeader header, uint32_t key, size_t stringSize, char *s); /* from neo_aa_header.c */
 
 #define AAR_MAGIC 0x31304141 /* The AAR/AA01 Magic, raw. */
 #define YAA_MAGIC 0x31414159 /* From tales of old, the YAA format; replaced by AA01 / AAR. */

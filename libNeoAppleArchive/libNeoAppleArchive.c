@@ -7,6 +7,7 @@
 
 #include "libNeoAppleArchive.h"
 #include "libNeoAppleArchive_internal.h"
+#include "neo_aa_stream.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
 #include <lzfse.h>
@@ -17,6 +18,7 @@
 #include <dirent.h>
 #include <libgen.h>
 #include "compression/lzraven/lzraven.h"
+#include <errno.h>
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header) {
     if (!header) {
@@ -59,10 +61,14 @@ void neo_aa_archive_item_add_blob_data(NeoAAArchiveItem item, char *data, size_t
     char *encodedBlobData = item->encodedBlobData;
     if (encodedBlobData) {
         /* Zero out item->encodedBlobData BEFORE we free it to prevent weird UaF race threading issues */
-        item->encodedBlobData = 0;
+        item->encodedBlobData = NULL;
         free(encodedBlobData);
     }
     encodedBlobData = malloc(dataSize);
+    if (!encodedBlobData) {
+        NEO_AA_ErrorHeapAlloc();
+        return;
+    }
     for (size_t i = 0; i < dataSize; i++) {
         encodedBlobData[i] = data[i];
     }
@@ -265,23 +271,32 @@ int neo_aa_archive_plain_write_buffer(NeoAAArchivePlain plainArchive, uint8_t *b
     return 0;
 }
 
-void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
-    NEO_AA_NullParamAssert(plainArchive);
+NEO_INTERNAL_API int neo_aa_archive_plain_writefd_err(NeoAAArchivePlain plainArchive, int fd) {
+    if (!plainArchive) {
+        NEO_AA_LogError("plainArchive is NULL\n");
+        return -1;
+    }
     /* Ugly slow */
     size_t archiveSize = neo_aa_archive_plain_outfile_size(plainArchive);
     if (!archiveSize) {
         NEO_AA_LogError("failed to get outfile size\n");
-        return;
+        return -1;
     }
     /* Now we know what the archive size will be, create it. */
     uint8_t *buffer = malloc(archiveSize); /* buffer to write to fd */
     if (neo_aa_archive_plain_write_buffer(plainArchive, buffer)) {
         NEO_AA_LogError("neo_aa_archive_plain_write_buffer failed\n");
         free(buffer);
-        return;
+        return -1;
     }
     write(fd, buffer, archiveSize);
     free(buffer);
+    return 0;
+}
+
+void neo_aa_archive_plain_writefd(NeoAAArchivePlain plainArchive, int fd) {
+    NEO_AA_NullParamAssert(plainArchive);
+    neo_aa_archive_plain_writefd_err(plainArchive, fd);
 }
 
 uint8_t *neo_aa_archive_plain_get_encoded_data(NeoAAArchivePlain archive, size_t *encodedDataSize) {
@@ -1038,10 +1053,16 @@ NEO_INTERNAL_API static int add_directory_contents_to_archive(const char *dirPat
 #if !(defined(_WIN32) || defined(WIN32))
         /* Set UID/GID on Unix-like systems */
         if (fileStat.st_uid != (uid_t)-1) {
-            neo_aa_header_set_field_uint(header, NEO_AA_FIELD_C("UID"), 2, (unsigned short)fileStat.st_uid);
+            if (neo_aa_header_set_field_uint_err(header, NEO_AA_FIELD_C("UID"), 2, (unsigned short)fileStat.st_uid)) {
+                NEO_AA_LogError("failed to set uid field\n");
+                continue;
+            }
         }
         if (fileStat.st_gid != (gid_t)-1) {
-            neo_aa_header_set_field_uint(header, NEO_AA_FIELD_C("GID"), 1, (unsigned char)fileStat.st_gid);
+            if (neo_aa_header_set_field_uint_err(header, NEO_AA_FIELD_C("GID"), 1, (unsigned char)fileStat.st_gid)) {
+                NEO_AA_LogError("failed to set gid field\n");
+                continue;
+            }
         }
 #endif
 
@@ -1260,283 +1281,677 @@ NeoAAArchivePlain neo_aa_archive_plain_from_directory(const char *dirPath) {
     return NULL;
 }
 
-int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPath) {
-    /* 
-     * TODO: Redo this entire function.
-     * This is by far the worst coded function in this whole library.
-     */
-    char *oldWorkingDir = getcwd(NULL, 0);
-    /* load binary into memory */
-    FILE *fp = fopen(archivePath,"rb");
-    if (!fp) {
-        NEO_AA_LogError("failed to find path\n");
+NEO_INTERNAL_API static int neo_aa_extract_raw_aar_to_path_err(const char *archivePath, const char *outputPath) {
+    if (!archivePath || !outputPath || !outputPath[0]) {
+        NEO_AA_LogError("invalid path\n");
         return -1;
     }
-    if (fseeko(fp, 0, SEEK_END) != 0) {
-        NEO_AA_LogError("reached SEEK_END\n");
-        fclose(fp);
+
+    FILE *archive = fopen(archivePath, "rb");
+    if (!archive) {
+        NEO_AA_LogError("failed to open archive\n");
         return -1;
     }
-    off_t fileSize = ftello(fp);
-    if (fileSize < 0 || fseeko(fp, 0, SEEK_SET) != 0) {
-        NEO_AA_LogError("file size is smaller\n");
-        fclose(fp);
+
+    /* get archive size */
+    if (fseeko(archive, 0, SEEK_END) != 0) {
+        fclose(archive);
         return -1;
     }
-    uint64_t appleArchiveSize = (uint64_t)fileSize;
-    uint8_t *appleArchive = malloc(appleArchiveSize);
-    if (!appleArchive) {
-        NEO_AA_LogError("failed to load appleArchive into memory\n");
-        return -3;
+
+    off_t archiveSize = ftello(archive);
+
+    if (archiveSize < 6 || fseeko(archive, 0, SEEK_SET) != 0) {
+        fclose(archive);
+        NEO_AA_LogError("invalid archive size\n");
+        return -1;
     }
-    size_t bytesRead = fread(appleArchive, 1, appleArchiveSize, fp);
-    fclose(fp);
-    if (bytesRead < appleArchiveSize) {
-        free(appleArchive);
-        NEO_AA_LogErrorF("failed to read the entire file (read %zu bytes, expected %llu).\n",bytesRead, appleArchiveSize);
-        return -2;
+
+    /* check archive magic */
+    uint8_t magicBytes[4];
+
+    if (neo_aa_read_exact(archive, magicBytes, sizeof(magicBytes))) {
+        fclose(archive);
+        return -1;
     }
-    uint32_t headerMagic;
-    memcpy(&headerMagic, appleArchive, 4);
-    if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
-        /* May be PBZE, if so uncompress it... */
-        NeoAAArchiveGeneric generic = neo_aa_archive_generic_from_encoded_data(appleArchiveSize, appleArchive);
-        if (!generic) {
-            /* assume NeoAAArchiveGeneric failed because it was not compressed */
-            NEO_AA_LogError("magic not AA01/YAA1.\n");
-            return -4;
-        }
-        NeoAAArchivePlain raw = generic->raw;
-        free(generic);
-        free(appleArchive);
-        /* Ugly slow */
-        size_t archiveSize = neo_aa_archive_plain_outfile_size(raw);
-        if (!archiveSize) {
-            NEO_AA_LogError("failed to get outfile size\n");
-            return -5;
-        }
-        /* Now we know what the archive size will be, create it. */
-        appleArchive = malloc(archiveSize); /* buffer to write to fd */
-        if (neo_aa_archive_plain_write_buffer(raw, appleArchive)) {
-            NEO_AA_LogError("neo_aa_archive_plain_write_buffer failed\n");
-            return -6;
-        }
-        neo_aa_archive_plain_destroy_nozero(raw);
-        appleArchiveSize = archiveSize;
+
+    uint32_t magic;
+    memcpy(&magic, magicBytes, sizeof(magic));
+
+    if (magic != AAR_MAGIC && magic != YAA_MAGIC) {
+        fclose(archive);
+        NEO_AA_LogError("compressed archives require a streaming decoder\n");
+        return -4;
     }
-    uint8_t *currentHeader = appleArchive;
-    int extracting = 1;
-    size_t outputPathLen = strlen(outputPath);
-    char *slashEndOfPath = internal_do_not_call_memrchr((char *)outputPath, '/', outputPathLen);
-    char *newPath;
-    if (outputPath[outputPathLen - 1] == '/') {
-        size_t sizeOfNewPath = slashEndOfPath - outputPath;
-        newPath = malloc(sizeOfNewPath + 1);
-        strncpy(newPath, outputPath, sizeOfNewPath);
-        newPath[sizeOfNewPath + 1] = 0;
-        if (chdir(newPath)) {
-            NEO_AA_LogErrorF("chdir(newPath) failed for %s, trying anyway...\n",newPath);
-        }
-        free(newPath);
-    } else {
-        /* BAD! change this later. */
-        newPath = (char *)outputPath;
-        if (chdir(outputPath)) {
-            NEO_AA_LogErrorF("chdir(outputPath) failed for %s, trying anyway...\n", outputPath);
-            mkdir(outputPath, 0755);
-            chdir(outputPath);
-        }
+
+    if (fseeko(archive, 0, SEEK_SET) != 0) {
+        fclose(archive);
+        return -1;
     }
-    while (extracting) {
-        memcpy(&headerMagic, currentHeader, 4);
-        if (headerMagic != AAR_MAGIC && headerMagic != YAA_MAGIC) {
-            free(appleArchive);
-            NEO_AA_LogError("magic not AA01/YAA1.\n");
-            return -7;
+
+    /* create output directory if it doesn't already exist */
+    if (mkdir(outputPath, 0755) < 0 && errno != EEXIST) {
+        fclose(archive);
+        NEO_AA_LogError("failed to create output directory\n");
+        return -1;
+    }
+
+    struct stat outputStat;
+
+    if (stat(outputPath, &outputStat) < 0 || !S_ISDIR(outputStat.st_mode)) {
+        fclose(archive);
+        NEO_AA_LogError("output path is not a directory\n");
+        return -1;
+    }
+
+    /* extract entries sequentially */
+    int result = 0;
+
+    while (1) {
+        off_t currentPosition = ftello(archive);
+
+        if (currentPosition < 0) {
+            result = -1;
+            break;
         }
-        uint16_t headerSize;
-        memcpy(&headerSize, currentHeader + 4, 2);
-        NeoAAHeader header = neo_aa_header_create_with_encoded_data(headerSize, currentHeader);
+
+        if (currentPosition == archiveSize) {
+            break;
+        }
+
+        if (currentPosition > archiveSize ||
+            archiveSize - currentPosition < 6) {
+            NEO_AA_LogError("truncated archive header\n");
+            result = -1;
+            break;
+        }
+
+        uint8_t prefix[6];
+
+        if (neo_aa_read_exact(archive, prefix, sizeof(prefix))) {
+            result = -1;
+            break;
+        }
+
+        memcpy(&magic, prefix, 4);
+
+        if (magic != AAR_MAGIC && magic != YAA_MAGIC) {
+            NEO_AA_LogError("invalid entry magic\n");
+            result = -1;
+            break;
+        }
+
+        uint16_t headerSize = (uint16_t)prefix[4] | ((uint16_t)prefix[5] << 8);
+
+        if (headerSize < 6 || (uint64_t)headerSize > (uint64_t)(archiveSize - currentPosition)) {
+            NEO_AA_LogError("invalid header size\n");
+            result = -1;
+            break;
+        }
+
+        uint8_t *headerData = malloc(headerSize);
+
+        if (!headerData) {
+            result = -1;
+            break;
+        }
+
+        memcpy(headerData, prefix, sizeof(prefix));
+
+        if (neo_aa_read_exact(archive, headerData + sizeof(prefix), headerSize - sizeof(prefix))) {
+            free(headerData);
+            result = -1;
+            break;
+        }
+
+        NeoAAHeader header = neo_aa_header_create_with_encoded_data(headerSize, headerData);
+
+        free(headerData);
+
         if (!header) {
-            free(appleArchive);
-            NEO_AA_LogError("header creation fail\n");
-            return -8;
+            NEO_AA_LogError("failed to parse header\n");
+            result = -1;
+            break;
         }
-        uint32_t typKey = NEO_AA_FIELD_C("TYP");
-        int typIndex = neo_aa_header_get_field_key_index(header, typKey);
-        if (typIndex == -1) {
-            free(appleArchive);
-            NEO_AA_LogError("no TYP field\n");
-            return -9;
+
+        int typIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("TYP"));
+
+        int patIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("PAT"));
+
+        int modIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("MOD"));
+
+        int uidIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("UID"));
+
+        int gidIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("GID"));
+
+        int datIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("DAT"));
+
+        int xatIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("XAT"));
+
+        int lnkIndex = neo_aa_header_get_field_key_index(header, NEO_AA_FIELD_C("LNK"));
+
+        if (typIndex < 0 || patIndex < 0) {
+            neo_aa_header_destroy_nozero(header);
+            NEO_AA_LogError("missing TYP or PAT field\n");
+            result = -1;
+            break;
         }
-        uint32_t patKey = NEO_AA_FIELD_C("PAT");
-        int patIndex = neo_aa_header_get_field_key_index(header, patKey);
-        if (patIndex == -1) {
-            free(appleArchive);
-            NEO_AA_LogError("no PAT field\n");
-            return -10;
+
+        uint8_t entryType = neo_aa_header_get_field_key_uint(header, typIndex);
+
+        char *pathName = neo_aa_header_get_field_key_string(header, patIndex);
+
+        if (!pathName) {
+            neo_aa_header_destroy_nozero(header);
+            result = -1;
+            break;
         }
-        uint32_t modKey = NEO_AA_FIELD_C("MOD");
-        int modIndex = neo_aa_header_get_field_key_index(header, modKey);
-        uint32_t uidKey = NEO_AA_FIELD_C("UID");
-        int uidIndex = neo_aa_header_get_field_key_index(header, uidKey);
-        uint32_t gidKey = NEO_AA_FIELD_C("GID");
-        int gidIndex = neo_aa_header_get_field_key_index(header, gidKey);
-        uint32_t xatKey = NEO_AA_FIELD_C("XAT");
-        int xatIndex = neo_aa_header_get_field_key_index(header, xatKey);
-        size_t pathSize = neo_aa_header_get_field_size(header, patIndex);
-        uint8_t typEntryType = neo_aa_header_get_field_key_uint(header, typIndex);
-        struct stat st;
-        char *pathName;
-        size_t xatSize = 0;
-        if (!pathSize) {
-            /* directory has empty name, this is only for creating outputPath */
-            if (xatIndex != -1) {
-                /* Somehow the outputPath has its own XAT??? Just skip it... */
-                xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
-            }
-            currentHeader += (headerSize + xatSize);
-            continue;
-        } else {
-            pathName = neo_aa_header_get_field_key_string(header, patIndex);
-        }
-        if (typEntryType == 'D') {
-            /* Header for directory */
-#if defined(_WIN32) || defined(WIN32)
-            mkdir(pathName);
-#else
-            uint64_t accessMode;
-            if (modIndex != -1) {
-                accessMode = neo_aa_header_get_field_key_uint(header, modIndex);
-                mkdir(pathName, accessMode);
-            } else {
-                mkdir(pathName, 0755);
-            }
-            int fd = open(pathName, O_RDWR | O_NOFOLLOW);
-            if (fd != -1) {
-                fstat(fd, &st);
-                uid_t fileUid = st.st_uid;
-                gid_t fileGid = st.st_gid;
-                if (uidIndex != -1) {
-                    fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
+
+        /*
+         * Empty PAT entries are permitted for archive-root
+         * metadata. They have no filesystem output.
+         */
+        if (!pathName[0]) {
+            uint64_t xatSize = xatIndex >= 0 ? neo_aa_header_get_field_key_uint(header, xatIndex) : 0;
+
+            neo_aa_header_destroy_nozero(header);
+            free(pathName);
+
+            if (xatSize) {
+                if (neo_aa_skip_stream(archive, xatSize)) {
+                    result = -1;
+                    break;
                 }
-                if (gidIndex != -1) {
-                    fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
-                }
-                fchown(fd, fileUid, fileGid);
-                if (xatIndex != -1) {
-                    xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
-                    uint8_t *xattrBlob = currentHeader + headerSize;
-                    internal_do_not_call_apply_xattr_blob_to_fd(xattrBlob, xatSize, fd);
-                }
-                close(fd);
-            }
-#endif
-            currentHeader += (headerSize + xatSize);
-        } else if (typEntryType == 'F') {
-            /* Header for file */
-            uint32_t datKey = NEO_AA_FIELD_C("DAT");
-            int datIndex = neo_aa_header_get_field_key_index(header, datKey);
-            if (datIndex == -1) {
-                free(pathName);
-                free(appleArchive);
-                NEO_AA_LogError("no DAT field\n");
-                return -12;
-            }
-            uint64_t dataSize = neo_aa_header_get_field_key_uint(header, datIndex);
-            /* make sure we don't overflow and leak data in output */
-            uint64_t endOfFile = appleArchiveSize - ((currentHeader - appleArchive) + headerSize);
-            if (dataSize > endOfFile) {
-                free(pathName);
-                free(appleArchive);
-                NEO_AA_LogError("dataSize overflow\n");
-                return -13;
             }
 
-            FILE *fp = fopen(pathName, "w+");
-            if (!fp) {
-                NEO_AA_LogErrorF("could not open pathName: %s, trying to open fullPath instead as last resort...\n",pathName);
-                char fullPath[1024];
-                snprintf(fullPath, sizeof(fullPath), "%s/%s", newPath, pathName);
-                free(pathName);
-                fp = fopen(fullPath, "w+");
-                if (!fp) {
-                    free(appleArchive);
-                    NEO_AA_LogErrorF("could not open fullPath: %s\n", fullPath);
-                    return -14;
+            continue;
+        }
+
+        if (neo_aa_validate_archive_path(pathName)) {
+            NEO_AA_LogError("unsafe archive path\n");
+            free(pathName);
+            neo_aa_header_destroy_nozero(header);
+            result = -1;
+            break;
+        }
+
+        if (neo_aa_make_parent_directories(outputPath, pathName)) {
+            free(pathName);
+            neo_aa_header_destroy_nozero(header);
+            result = -1;
+            break;
+        }
+
+        char fullPath[PATH_MAX];
+
+        int pathLength = snprintf(fullPath, sizeof(fullPath), "%s/%s", outputPath, pathName);
+
+        if (pathLength < 0 ||
+            (size_t)pathLength >= sizeof(fullPath)) {
+            free(pathName);
+            neo_aa_header_destroy_nozero(header);
+            result = -1;
+            break;
+        }
+
+        uint64_t xatSize = xatIndex >= 0 ? neo_aa_header_get_field_key_uint(header, xatIndex) : 0;
+
+        if (entryType == 'D') {
+            /* directory */
+            uint64_t mode = modIndex >= 0 ? neo_aa_header_get_field_key_uint(header, modIndex) : 0755;
+
+            if (mkdir(fullPath, (mode_t)mode) < 0 &&
+                errno != EEXIST) {
+                result = -1;
+            }
+
+            int fd = -1;
+
+            if (!result) {
+                fd = open(
+                    fullPath,
+                    O_RDONLY
+#ifdef O_DIRECTORY
+                    | O_DIRECTORY
+#endif
+#ifdef O_NOFOLLOW
+                    | O_NOFOLLOW
+#endif
+                );
+
+                if (fd < 0) {
+                    result = -1;
                 }
             }
-#if defined(_WIN32) || defined(WIN32)
-            /* Windows does not implement unix uid_t/gid_t */
+
+#if !defined(_WIN32) && !defined(WIN32)
+            if (fd >= 0) {
+                struct stat st;
+
+                if (fstat(fd, &st) == 0 && S_ISDIR(st.st_mode)) {
+                    if (uidIndex >= 0 || gidIndex >= 0) {
+                        uid_t uid = uidIndex >= 0 ? (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex) : st.st_uid;
+
+                        gid_t gid = gidIndex >= 0 ? (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex) : st.st_gid;
+
+                        fchown(fd, uid, gid);
+                    }
+
+                    fchmod(fd, (mode_t)mode);
+
+                    if (xatSize && neo_aa_read_apply_xattrs(archive, xatSize, fd)) {
+                        result = -1;
+                    }
+                } else {
+                    result = -1;
+                }
+
+                close(fd);
+            }
 #else
-            int fd = fileno(fp);
-            if (fd != -1) {
-                fstat(fd, &st);
-                if (S_ISLNK(st.st_mode)) {
-                    /* prevent arbitrary file write */
-                    fclose(fp);
-                    free(appleArchive);
-                    NEO_AA_LogErrorF("tried to open normal file, instead opened symlink at %s\n", pathName);
-                    free(pathName);
-                    return -16;
-                }
-                uid_t fileUid = st.st_uid;
-                gid_t fileGid = st.st_gid;
-                if (uidIndex != -1) {
-                    fileUid = (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex);
-                }
-                if (gidIndex != -1) {
-                    fileGid = (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex);
-                }
-                fchown(fd, fileUid, fileGid);
-                if (modIndex != -1) {
-                    uint64_t accessMode = neo_aa_header_get_field_key_uint(header, modIndex);
-                    fchmod(fd, accessMode);
-                }
+            if (xatSize && neo_aa_skip_stream(archive, xatSize)) {
+                result = -1;
             }
 #endif
-            uint8_t *fileData = currentHeader + headerSize;
-            /* copy file data to buffer */
-            fwrite(fileData, dataSize, 1, fp);
-            xatSize = 0;
-            if (xatIndex != -1) {
-                xatSize = neo_aa_header_get_field_key_uint(header, xatIndex);
-                uint8_t *xattrBlob = currentHeader + headerSize + dataSize;
-                internal_do_not_call_apply_xattr_blob_to_fd(xattrBlob, xatSize, fd);
+        } else if (entryType == 'F') {
+            /* file */
+            if (datIndex < 0) {
+                NEO_AA_LogError("missing DAT field\n");
+                result = -1;
+            } else {
+                uint64_t dataSize = neo_aa_header_get_field_key_uint(header, datIndex);
+
+                off_t dataPosition = ftello(archive);
+
+                if (dataPosition < 0 || (uint64_t)dataPosition > (uint64_t)archiveSize || dataSize > (uint64_t)(archiveSize - dataPosition) || xatSize > (uint64_t)(archiveSize - dataPosition) - dataSize) {
+                    NEO_AA_LogError("file data exceeds archive bounds\n");
+                    result = -1;
+                } else {
+#ifdef O_NOFOLLOW
+                    int fd = open(fullPath, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+#else
+                    int fd = open(fullPath, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+#endif
+
+                    if (fd < 0) {
+                        result = -1;
+                    } else {
+                        FILE *output = fdopen(fd, "wb");
+
+                        if (!output) {
+                            close(fd);
+                            result = -1;
+                        } else {
+                            /*
+                             * Copy DAT directly to disk.
+                             * Memory consumption is independent
+                             * of the file's size.
+                             */
+                            if (neo_aa_copy_stream(archive, output, dataSize)) {
+                                result = -1;
+                            }
+
+                            if (!result && fflush(output) != 0) {
+                                result = -1;
+                            }
+
+#if !defined(_WIN32) && !defined(WIN32)
+                            if (!result) {
+                                struct stat st;
+
+                                if (fstat(fd, &st) == 0) {
+                                    uid_t uid = uidIndex >= 0 ? (uid_t)neo_aa_header_get_field_key_uint(header, uidIndex) : st.st_uid;
+
+                                    gid_t gid = gidIndex >= 0 ? (gid_t)neo_aa_header_get_field_key_uint(header, gidIndex) : st.st_gid;
+
+                                    if (uidIndex >= 0 || gidIndex >= 0) {
+                                        fchown(fd, uid, gid);
+                                    }
+
+                                    if (modIndex >= 0) {
+                                        fchmod(fd, (mode_t)neo_aa_header_get_field_key_uint(header, modIndex));
+                                    }
+                                } else {
+                                    result = -1;
+                                }
+                            }
+
+                            if (!result && xatSize &&
+                                neo_aa_read_apply_xattrs(archive, xatSize, fd)) {
+                                result = -1;
+                            }
+#else
+                            if (!result && xatSize &&
+                                neo_aa_skip_stream(archive, xatSize)) {
+                                result = -1;
+                            }
+#endif
+                            fclose(output);
+                        }
+                    }
+                }
             }
-            fclose(fp);
-            currentHeader += (headerSize + dataSize + xatSize);
-        } else if (typEntryType == 'L') {
-            /* Symlink for file */
-            uint32_t lnkKey = NEO_AA_FIELD_C("LNK");
-            int lnkIndex = neo_aa_header_get_field_key_index(header, lnkKey);
-            if (lnkIndex == -1) {
-                free(pathName);
-                free(appleArchive);
-                fprintf(stderr, "neo_aa_extract_aar_to_path: no LNK field\n");
-                return -17;
+        } else if (entryType == 'L') {
+            /* symlink */
+            if (lnkIndex < 0) {
+                result = -1;
+            } else {
+                char *target = neo_aa_header_get_field_key_string(header, lnkIndex);
+
+                if (!target) {
+                    result = -1;
+                } else {
+                    if (symlink(target, fullPath) < 0) {
+                        result = -1;
+                    }
+
+                    free(target);
+                }
+
+                if (!result && xatSize &&
+                    neo_aa_skip_stream(archive, xatSize)) {
+                    result = -1;
+                }
             }
-            char *lnkPath = neo_aa_header_get_field_key_string(header, lnkIndex);
-            symlink(lnkPath, pathName);
-            free(lnkPath);
-            currentHeader += headerSize;
         } else {
-            free(pathName);
-            free(appleArchive);
-            NEO_AA_LogErrorF("AAEntryType %c not supported yet, only D, F, and L currently are\n",typEntryType);
-            return -15;
+            NEO_AA_LogErrorF("unsupported archive entry type: %c\n", entryType);
+            result = -1;
         }
+
         free(pathName);
-        size_t currentHeader_IndexOfArchive = (currentHeader - appleArchive);
-        if (currentHeader_IndexOfArchive >= appleArchiveSize) {
-            /* reached end of file */
-            extracting = 0;
+        neo_aa_header_destroy_nozero(header);
+
+        if (result) {
+            break;
         }
     }
-    free(appleArchive);
-    /* Restore original working dir */
-    chdir(oldWorkingDir);
+
+    fclose(archive);
+
+    if (result) {
+        NEO_AA_LogError("archive extraction failed\n");
+        return -1;
+    }
+
     return 0;
+}
+
+/*
+ * neo_aa_extract_aar_to_path_err
+ *
+ * Extracts an Apple Archive to the specified destination path.
+ *
+ * Supports RAW (AA01/YAA1) archives, as well as compressed PBZZ
+ * (ZLIB), PBZE (LZFSE), PBZB (LZBITMAP), and PBZM (LZRAVEN) archives.
+ *
+ * RAW and PBZZ archives are extracted using streaming operations to
+ * minimize memory usage. PBZE, PBZB, and PBZM archives are currently
+ * decompressed in memory due to the lack of streaming decompression
+ * implementations for these types.
+ *
+ * If the function was successful, it will return 0.
+ * If not, it will return a negative error code.
+*/
+int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPath) {
+    if (!archivePath || !outputPath || !outputPath[0]) {
+        NEO_AA_LogError("invalid path\n");
+        return -1;
+    }
+
+    FILE *archive = fopen(archivePath, "rb");
+    if (!archive) {
+        NEO_AA_LogError("failed to open archive\n");
+        return -1;
+    }
+
+    if (fseeko(archive, 0, SEEK_END) != 0) {
+        fclose(archive);
+        return -1;
+    }
+
+    off_t archiveSize = ftello(archive);
+
+    if (archiveSize < 6 || fseeko(archive, 0, SEEK_SET) != 0) {
+        fclose(archive);
+        NEO_AA_LogError("invalid archive size\n");
+        return -1;
+    }
+
+    uint8_t magicBytes[4];
+
+    if (neo_aa_read_exact(archive, magicBytes, sizeof(magicBytes))) {
+        fclose(archive);
+        NEO_AA_LogError("failed to read magic of top header");
+        return -1;
+    }
+
+    uint32_t magic;
+    memcpy(&magic, magicBytes, sizeof(magic));
+
+    if (magic == AAR_MAGIC || magic == YAA_MAGIC) {
+        fclose(archive);
+        return neo_aa_extract_raw_aar_to_path_err(archivePath, outputPath);
+    }
+
+    if ((magic & 0x00FFFFFF) != PBZ__MAGIC) {
+        fclose(archive);
+        NEO_AA_LogError("magic is not AA01/YAA1 or PBZE\n");
+        return -1;
+    }
+
+    char compressionType = (char)(magic >> 24);
+
+    /* use a private temporary directory to store the decompressed archive */
+    const char *tempDir = getenv("TMPDIR");
+
+    if (!tempDir || !tempDir[0]) {
+        tempDir = "/tmp";
+    }
+
+    char tempDirectory[PATH_MAX];
+
+    int tempDirectoryLength = snprintf(tempDirectory, sizeof(tempDirectory), "%s/neo_aa_extract_XXXXXX", tempDir);
+
+    if (tempDirectoryLength < 0 || (size_t)tempDirectoryLength >= sizeof(tempDirectory)) {
+        fclose(archive);
+        NEO_AA_LogError("temporary directory path too long\n");
+        return -1;
+    }
+
+    if (!mkdtemp(tempDirectory)) {
+        fclose(archive);
+        NEO_AA_LogError("failed to create temporary directory\n");
+        return -1;
+    }
+
+    char tempPath[PATH_MAX];
+
+    int tempPathLength = snprintf(tempPath, sizeof(tempPath), "%s/archive.raw", tempDirectory);
+
+    if (tempPathLength < 0 || (size_t)tempPathLength >= sizeof(tempPath)) {
+        fclose(archive);
+        rmdir(tempDirectory);
+        NEO_AA_LogError("tempPathLength < 0 || (size_t)tempPathLength >= sizeof(tempPath))\n");
+        return -1;
+    }
+
+    int result = -1;
+
+    if (compressionType == 'z') {
+        /* ZLIB */
+        if (archiveSize < 0x1C) {
+            NEO_AA_LogError("invalid PBZZ header\n");
+            goto cleanup;
+        }
+
+        uint8_t header[0x1C];
+
+        if (fseeko(archive, 0, SEEK_SET) != 0 ||
+            neo_aa_read_exact(archive, header, sizeof(header))) {
+            NEO_AA_LogError("failed to read PBZZ header\n");
+            goto cleanup;
+        }
+
+        uint32_t uncompressedSize = ((uint32_t)header[0x10] << 24) | ((uint32_t)header[0x11] << 16) | ((uint32_t)header[0x12] << 8) | ((uint32_t)header[0x13]);
+
+        uint32_t compressedSize = ((uint32_t)header[0x18] << 24) | ((uint32_t)header[0x19] << 16) | ((uint32_t)header[0x1A] << 8) | ((uint32_t)header[0x1B]);
+
+        if ((uint64_t)compressedSize > (uint64_t)(archiveSize - 0x1C)) {
+            NEO_AA_LogError("compressed data exceeds archive bounds\n");
+            goto cleanup;
+        }
+
+        if (fseeko(archive, 0x1C, SEEK_SET) != 0) {
+            NEO_AA_LogError("(fseeko(archive, 0x1C, SEEK_SET) != 0)\n");
+            goto cleanup;
+        }
+
+        int tempFD = open(tempPath, O_RDWR | O_CREAT | O_EXCL, 0600);
+
+        if (tempFD < 0) {
+            NEO_AA_LogError("failed to create temporary archive\n");
+            goto cleanup;
+        }
+
+        FILE *tempFile = fdopen(tempFD, "w+b");
+
+        if (!tempFile) {
+            close(tempFD);
+            unlink(tempPath);
+            NEO_AA_LogError("fdopen(tempFD, \"w+b\") failed\n");
+            goto cleanup;
+        }
+
+        if (internal_do_not_call_inflate_stream(archive, tempFile, compressedSize)) {
+            NEO_AA_LogError("failed to decompress ZLIB data\n");
+            fclose(tempFile);
+            goto cleanup;
+        }
+
+        if (fflush(tempFile) != 0) {
+            fclose(tempFile);
+            NEO_AA_LogError("failed to flush tempFile\n");
+            goto cleanup;
+        }
+
+        if (fseeko(tempFile, 0, SEEK_END) != 0) {
+            fclose(tempFile);
+            NEO_AA_LogError("(fseeko(tempFile, 0, SEEK_END)\n");
+            goto cleanup;
+        }
+
+        off_t actualSize = ftello(tempFile);
+
+        if (actualSize < 0 || (uint64_t)actualSize != (uint64_t)uncompressedSize) {
+            NEO_AA_LogError("incorrect decompressed size\n");
+            fclose(tempFile);
+            goto cleanup;
+        }
+
+        if (fseeko(tempFile, 0, SEEK_SET) != 0) {
+            fclose(tempFile);
+            NEO_AA_LogError("(fseeko(tempFile, 0, SEEK_SET) != 0)\n");
+            goto cleanup;
+        }
+
+        uint8_t rawMagicBytes[4];
+
+        if (neo_aa_read_exact(tempFile, rawMagicBytes, sizeof(rawMagicBytes))) {
+            fclose(tempFile);
+            NEO_AA_LogError("failed to read magic\n");
+            goto cleanup;
+        }
+
+        uint32_t rawMagic;
+        memcpy(&rawMagic, rawMagicBytes, sizeof(rawMagic));
+
+        if (rawMagic != AAR_MAGIC && rawMagic != YAA_MAGIC) {
+            NEO_AA_LogError("decompressed data is not a RAW archive\n");
+            fclose(tempFile);
+            goto cleanup;
+        }
+
+        fclose(tempFile);
+    } else {
+        /*
+         * PBZE / LZFSE
+         * PBZB / LZBITMAP
+         * PBZM / LZRAVEN
+         *
+         * These formats still require the generic in-memory decoder.
+         */
+        if ((uint64_t)archiveSize > SIZE_MAX) {
+            NEO_AA_LogError("archive too large for memory decoder\n");
+            goto cleanup;
+        }
+
+        size_t encodedSize = (size_t)archiveSize;
+
+        uint8_t *encodedData = malloc(encodedSize);
+
+        if (!encodedData) {
+            NEO_AA_ErrorHeapAlloc();
+            goto cleanup;
+        }
+
+        if (fseeko(archive, 0, SEEK_SET) != 0 || neo_aa_read_exact(archive, encodedData, encodedSize)) {
+            free(encodedData);
+            NEO_AA_LogError("failed to read compressed archive\n");
+            goto cleanup;
+        }
+
+        NeoAAArchiveGeneric genericArchive = neo_aa_archive_generic_from_encoded_data(encodedSize, encodedData);
+
+        free(encodedData);
+
+        if (!genericArchive) {
+            NEO_AA_LogError("failed to decode compressed archive\n");
+            goto cleanup;
+        }
+
+        int tempFD = open(tempPath, O_WRONLY | O_CREAT | O_EXCL, 0600);
+
+        if (tempFD < 0) {
+            neo_aa_archive_plain_destroy_nozero(genericArchive->raw);
+            free(genericArchive);
+            NEO_AA_LogError("failed to create temporary archive\n");
+            goto cleanup;
+        }
+
+        if (neo_aa_archive_plain_writefd_err(genericArchive->raw, tempFD)) {
+            close(tempFD);
+            unlink(tempPath);
+
+            neo_aa_archive_plain_destroy_nozero(genericArchive->raw);
+            free(genericArchive);
+
+            NEO_AA_LogError("failed to write decoded RAW archive\n");
+            goto cleanup;
+        }
+
+        if (close(tempFD) != 0) {
+            unlink(tempPath);
+
+            neo_aa_archive_plain_destroy_nozero(genericArchive->raw);
+            free(genericArchive);
+
+            goto cleanup;
+        }
+
+        neo_aa_archive_plain_destroy_nozero(genericArchive->raw);
+        free(genericArchive);
+    }
+
+    /* extract the raw, decompressed aar now that we decompressed it */
+    result = neo_aa_extract_raw_aar_to_path_err(tempPath, outputPath);
+
+cleanup:
+    fclose(archive);
+
+    unlink(tempPath);
+    rmdir(tempDirectory);
+
+    return result;
 }
 
 void neo_aa_extract_aar_to_path(const char *archivePath, const char *outputPath) {

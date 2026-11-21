@@ -325,10 +325,12 @@ free_all:
         
         /* make value */
         uint8_t *fieldKeyValue = malloc(fieldKeySize);
-        /* copy field key to fieldKeyValue */
-        for (size_t i = 0; i < fieldKeySize; i++) {
-            fieldKeyValue[i] = headerData[currentPos + i];
+        if (!fieldKeyValue) {
+            NEO_AA_ErrorHeapAlloc();
+            goto free_all;
         }
+        /* copy field key to fieldKeyValue */
+        memcpy(fieldKeyValue, headerData + currentPos, fieldKeySize);
         fieldKeyValues[fieldCount - 1] = fieldKeyValue;
         
         currentPos += fieldKeySize;
@@ -1129,6 +1131,20 @@ NeoAAHeader neo_aa_header_clone_header(NeoAAHeader header) {
         size_t fieldKeySize = fieldKeySizes[i];
         uint8_t *fieldValue = fieldValues[i];
         uint8_t *copiedFieldValue = malloc(fieldKeySize);
+        if (!copiedFieldValue) {
+            if (i) {
+                for (int j = 0; j < i; j++) {
+                    free(copiedFieldValues[j]);
+                }
+            }
+            free(copiedFieldTypes);
+            free(copiedFieldKeys);
+            free(copiedEncodedData);
+            free(copiedFieldKeySizes);
+            free(clonedHeader);
+            NEO_AA_ErrorHeapAlloc();
+            return NULL;
+        }
         for (size_t j = 0; j < fieldKeySize; j++) {
             copiedFieldValue[j] = fieldValue[j];
         }
