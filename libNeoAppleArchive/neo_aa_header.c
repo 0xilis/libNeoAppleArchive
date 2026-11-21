@@ -26,7 +26,7 @@ NeoAAHeader neo_aa_header_create(void) {
     headerData[4] = 6; /* 6 bytes long on creation */
     headerData[5] = 0;
     header->encodedData = headerData;
-    header->headerSize = default_header_size;
+    header->headerSize = 6;
     return header;
 }
 
@@ -387,94 +387,133 @@ size_t neo_aa_header_get_field_size(NeoAAHeader header, int index) {
     return header->fieldKeySizes[index];
 }
 
-NEO_INTERNAL_API static void neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
-    NEO_AA_NullParamAssert(header);
+NEO_INTERNAL_API static int neo_aa_header_add_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return -1;
+    }
     internal_do_not_call_is_field_key_available(key);
-    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize));
+    if (internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize) == 0) {
+        NEO_AA_LogError("fieldSize not supported for specified fieldType\n");
+        return -1;
+    }
+
+    if (fieldSize > sizeof(value) ||
+        header->headerSize > UINT16_MAX - 4 - fieldSize ||
+        header->fieldCount == UINT32_MAX) {
+        NEO_AA_LogError("invalid field size or header exceeds maximum size\n");
+        return -1;
+    }
+
     size_t oldSize = header->headerSize;
     size_t newSize = oldSize + 4 + fieldSize;
-    if (newSize > UINT16_MAX) {
-        NEO_AA_LogError("header exceeds maximum encoded size\n");
-        return;
-    }
-    char *encodedData = header->encodedData;
     uint32_t fieldCount = header->fieldCount;
-    char *newEncodedData = realloc(encodedData, newSize);
-    if (!newEncodedData) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
+
+    if (!header->encodedData) {
+        NEO_AA_LogError("header missing encoded data\n");
+        return -1;
     }
-    uint32_t *newFieldKeys = realloc(header->fieldKeys, (fieldCount + 1) * sizeof(uint32_t));
-    if (!newFieldKeys) {
+
+    /* Allocate all replacement buffers independently. */
+    char *newEncodedData = calloc(1, newSize);
+    uint32_t *newFieldKeys = calloc(1, (fieldCount + 1) * sizeof(uint32_t));
+    char *newFieldTypes = calloc(1, fieldCount + 1);
+    void **newFieldValues = calloc(1, (fieldCount + 1) * sizeof(void *));
+    size_t *newFieldKeySizes = calloc(1, (fieldCount + 1) * sizeof(size_t));
+    uint64_t *newFieldValue = calloc(1, sizeof(uint64_t));
+
+    if (!newEncodedData || !newFieldKeys || !newFieldTypes ||
+        !newFieldValues || !newFieldKeySizes || !newFieldValue) {
+        free(newEncodedData);
+        free(newFieldKeys);
+        free(newFieldTypes);
+        free(newFieldValues);
+        free(newFieldKeySizes);
+        free(newFieldValue);
         NEO_AA_ErrorHeapAlloc();
-        return;
+        return -1;
     }
-    char *newFieldTypes = realloc(header->fieldTypes, fieldCount + 1);
-    if (!newFieldTypes) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
+
+    /* Copy existing data. */
+    memcpy(newEncodedData, header->encodedData, oldSize);
+
+    if (fieldCount) {
+        memcpy(newFieldKeys, header->fieldKeys, fieldCount * sizeof(uint32_t));
+        memcpy(newFieldTypes, header->fieldTypes, fieldCount);
+        memcpy(newFieldValues, header->fieldValues, fieldCount * sizeof(void *));
+        memcpy(newFieldKeySizes, header->fieldKeySizes, fieldCount * sizeof(size_t));
     }
-    void **newFieldValues = realloc(header->fieldValues, (fieldCount + 1) * sizeof(void*));
-    if (!newFieldValues) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    size_t *fieldKeySizes = realloc(header->fieldKeySizes, (fieldCount + 1) * sizeof(size_t));
-    if (!fieldKeySizes) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    uint16_t newSizeDowncast = (uint16_t)newSize;
-    /* Update encodedData with new size */
-    memcpy(newEncodedData + 4, &newSizeDowncast, 2);
-    uint32_t dumbPatchworkFix = FLIP_32(key);
-    memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
+
+    /* encode the new field */
+    uint16_t encodedSize = (uint16_t)newSize;
+    memcpy(newEncodedData + 4, &encodedSize, sizeof(encodedSize));
+
+    uint32_t encodedKey = FLIP_32(key);
+    memcpy(newEncodedData + oldSize, &encodedKey, sizeof(encodedKey));
+
     newEncodedData[oldSize + 3] = internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(fieldType, fieldSize);
+
     memcpy(newEncodedData + oldSize + 4, &value, fieldSize);
-    header->encodedData = newEncodedData;
-    header->headerSize = newSize;
-    fieldKeySizes[fieldCount] = fieldSize;
-    uint64_t *fieldValue = malloc(sizeof(uint64_t));
-    *fieldValue = value;
-    newFieldValues[fieldCount] = fieldValue;
-    newFieldTypes[fieldCount] = fieldType;
+
+    /* prepare the new field metadata */
+    *newFieldValue = value;
+
     newFieldKeys[fieldCount] = key;
-    header->fieldCount = fieldCount + 1;
-    header->fieldValues = newFieldValues;
+    newFieldTypes[fieldCount] = (char)fieldType;
+    newFieldValues[fieldCount] = newFieldValue;
+    newFieldKeySizes[fieldCount] = fieldSize;
+
+    /* commit only after every allocation has succeeded */
+    free(header->encodedData);
+    free(header->fieldKeys);
+    free(header->fieldTypes);
+    free(header->fieldValues);
+    free(header->fieldKeySizes);
+
+    header->encodedData = newEncodedData;
     header->fieldKeys = newFieldKeys;
     header->fieldTypes = newFieldTypes;
-    header->fieldKeySizes = fieldKeySizes;
+    header->fieldValues = newFieldValues;
+    header->fieldKeySizes = newFieldKeySizes;
+    header->headerSize = newSize;
+    header->fieldCount = fieldCount + 1;
+    return 0;
 }
 
-NEO_INTERNAL_API static void neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
+NEO_INTERNAL_API static int neo_aa_header_set_field_uint_or_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value, NeoAAFieldType fieldType) {
     /* TODO: Add support for fixing encodedData with keys that become larger */
-    NEO_AA_NullParamAssert(header);
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return -1;
+    }
     internal_do_not_call_is_field_key_available(key);
-    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize));
+    if (internal_do_not_call_is_field_type_supported_size(fieldType, fieldSize) == 0) {
+        NEO_AA_LogError("fieldSize not supported for specified fieldType\n");
+        return -1;
+    }
     int keyIndex = neo_aa_header_get_field_key_index(header, key);
     if (keyIndex == -1) {
-        neo_aa_header_add_field_uint_or_blob(header, key, fieldSize, value, fieldType);
-        return;
+        return neo_aa_header_add_field_uint_or_blob(header, key, fieldSize, value, fieldType);
     }
     size_t valueSize = neo_aa_header_get_field_size(header, keyIndex);
     if (valueSize != fieldSize) {
         /* TODO: This will probably be supported later but we need to reform the encodedData for this which is annoying */
         NEO_AA_LogError("setting field key with different size\n");
-        return;
+        return -1;
     }
     if (header->fieldTypes[keyIndex] != (char)fieldType) {
         NEO_AA_LogError("setting field key with different type\n");
-        return;
+        return -1;
     }
     void *encodedData = header->encodedData;
     if (!encodedData) {
         NEO_AA_LogError("header missing encoded data\n");
-        return;
+        return -1;
     }
     uint64_t encodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
     if (!encodedDataPos) {
         NEO_AA_LogError("failed to find position of key in encoded data\n");
-        return;
+        return -1;
     }
     void *valuePtr = header->fieldValues[keyIndex];
     switch (fieldSize) {
@@ -496,10 +535,11 @@ NEO_INTERNAL_API static void neo_aa_header_set_field_uint_or_blob(NeoAAHeader he
             
         default:
             NEO_AA_LogError("bad fieldSize\n");
-            return;
+            return -1;
     }
     void *encodedValuePtr = (uint8_t *)encodedData + encodedDataPos + 4;
     memcpy(encodedValuePtr, &value, fieldSize);
+    return 0;
 }
 
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value) {
@@ -520,86 +560,146 @@ void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t field
     neo_aa_header_set_field_uint_or_blob(header, key, fieldSize, blobSize, NEO_AA_FIELD_TYPE_BLOB);
 }
 
-void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
-    NEO_AA_NullParamAssert(header);
-    if (stringSize > USHRT_MAX) {
-        NEO_AA_LogErrorF("libNeoAppleArchive: stringSize %zu larger than USHRT_MAX\n",stringSize);
-        return;
-    }
-    internal_do_not_call_is_field_key_available(key);
-    size_t oldSize = header->headerSize;
-    size_t newSize = oldSize + 6 + stringSize;
-    if (newSize > USHRT_MAX) {
-        NEO_AA_LogErrorF("libNeoAppleArchive: headerSize grew past USHRT_MAX with newSize %zu\n",newSize);
-        return;
-    }
-    char *encodedData = header->encodedData;
-    uint32_t fieldCount = header->fieldCount;
-    char *newEncodedData = realloc(encodedData, newSize);
-    if (!newEncodedData) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    uint32_t *newFieldKeys = realloc(header->fieldKeys, (fieldCount + 1) * sizeof(uint32_t));
-    if (!newFieldKeys) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    char *newFieldTypes = realloc(header->fieldTypes, fieldCount + 1);
-    if (!newFieldTypes) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    void **newFieldValues = realloc(header->fieldValues, (fieldCount + 1) * sizeof(void*));
-    if (!newFieldValues) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    size_t *fieldKeySizes = realloc(header->fieldKeySizes, (fieldCount + 1) * sizeof(size_t));
-    if (!fieldKeySizes) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    uint16_t newSizeDowncast = (uint16_t)newSize;
-    /* Update encodedData with new size */
-    memcpy(newEncodedData + 4, &newSizeDowncast, 2);
-    uint32_t dumbPatchworkFix = FLIP_32(key);
-    memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
-    newEncodedData[oldSize + 3] = 'P';
-    memcpy(newEncodedData + oldSize + 4, &stringSize, 2);
-
-    /* Only copy string if it has a size */
-    if (stringSize) {
-        strncpy(newEncodedData + oldSize + 6, s, stringSize);
-    }
-
-    header->encodedData = newEncodedData;
-    header->headerSize = newSize;
-    fieldKeySizes[fieldCount] = stringSize;
-
-    char *fieldValue;
-    if (stringSize) {
-        fieldValue = malloc(stringSize + 1);
-        strncpy(fieldValue, s, stringSize);
-    } else {
-        /* If stringSize is 0, string is NULL */
-        fieldValue = 0;
-    }
-    newFieldValues[fieldCount] = fieldValue;
-    newFieldTypes[fieldCount] = NEO_AA_FIELD_TYPE_STRING;
-    newFieldKeys[fieldCount] = key;
-    header->fieldCount = fieldCount + 1;
-    header->fieldValues = newFieldValues;
-    header->fieldKeys = newFieldKeys;
-    header->fieldTypes = newFieldTypes;
-    header->fieldKeySizes = fieldKeySizes;
+/* Currently marked as internal as they have not yet been added to the main library, but it is planned */
+NEO_INTERNAL_API int neo_aa_header_set_field_uint_err(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value) {
+    return neo_aa_header_set_field_uint_or_blob(header, key, fieldSize, value, NEO_AA_FIELD_TYPE_UINT);
 }
 
-void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
-    NEO_AA_NullParamAssert(header);
+/* Currently marked as internal as they have not yet been added to the main library, but it is planned */
+NEO_INTERNAL_API int neo_aa_header_set_field_blob_err(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize) {
+    if (!fieldSize) {
+        if (blobSize < UINT16_MAX) {
+            fieldSize = 2;
+        } else if (blobSize < UINT32_MAX) {
+            fieldSize = 4;
+        } else {
+            fieldSize = 8;
+        }
+    }
+    /* Blobs are not part of neo_aa_header, you will add the context to a neo_aa_archive_item later. */
+    return neo_aa_header_set_field_uint_or_blob(header, key, fieldSize, blobSize, NEO_AA_FIELD_TYPE_BLOB);
+}
+
+int neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return -1;
+    }
+
+    if (stringSize > USHRT_MAX || (stringSize > 0 && !s)) {
+        NEO_AA_LogError("invalid string size or NULL string\n");
+        return -1;
+    }
+
     internal_do_not_call_is_field_key_available(key);
 
+    if (header->headerSize > UINT16_MAX - 6 - stringSize ||
+        header->fieldCount == UINT32_MAX) {
+        NEO_AA_LogError("header exceeds maximum encoded size\n");
+        return -1;
+    }
+
+    size_t oldSize = header->headerSize;
+    size_t newSize = oldSize + 6 + stringSize;
+    uint32_t fieldCount = header->fieldCount;
+
+    if (!header->encodedData) {
+        NEO_AA_LogError("header missing encoded data\n");
+        return -1;
+    }
+
+    /* allocate all replacement buffers */
+    char *newEncodedData = calloc(1, newSize);
+    uint32_t *newFieldKeys = calloc(1, (fieldCount + 1) * sizeof(uint32_t));
+    char *newFieldTypes = calloc(1, fieldCount + 1);
+    void **newFieldValues = calloc(1, (fieldCount + 1) * sizeof(void *));
+    size_t *newFieldKeySizes = calloc(1, (fieldCount + 1) * sizeof(size_t));
+
+    char *newFieldValue = NULL;
+
+    if (stringSize > 0) {
+        newFieldValue = calloc(1, stringSize);
+    }
+
+    if (!newEncodedData || !newFieldKeys || !newFieldTypes || !newFieldValues || !newFieldKeySizes || (stringSize > 0 && !newFieldValue)) {
+
+        free(newEncodedData);
+        free(newFieldKeys);
+        free(newFieldTypes);
+        free(newFieldValues);
+        free(newFieldKeySizes);
+        free(newFieldValue);
+
+        NEO_AA_ErrorHeapAlloc();
+        return -1;
+    }
+
+    /* copy existing contents */
+    memcpy(newEncodedData, header->encodedData, oldSize);
+
+    if (fieldCount) {
+        memcpy(newFieldKeys, header->fieldKeys, fieldCount * sizeof(uint32_t));
+        memcpy(newFieldTypes, header->fieldTypes, fieldCount);
+        memcpy(newFieldValues, header->fieldValues, fieldCount * sizeof(void *));
+        memcpy(newFieldKeySizes, header->fieldKeySizes, fieldCount * sizeof(size_t));
+    }
+
+    /* encode the new string field */
+    uint16_t encodedSize = (uint16_t)newSize;
+    memcpy(newEncodedData + 4, &encodedSize, sizeof(encodedSize));
+
+    uint32_t encodedKey = FLIP_32(key);
+    memcpy(newEncodedData + oldSize, &encodedKey, sizeof(encodedKey));
+
+    newEncodedData[oldSize + 3] = 'P';
+
+    uint16_t encodedStringSize = (uint16_t)stringSize;
+    memcpy(newEncodedData + oldSize + 4, &encodedStringSize, sizeof(encodedStringSize));
+
+    if (stringSize > 0) {
+        memcpy(newEncodedData + oldSize + 6, s, stringSize);
+        memcpy(newFieldValue, s, stringSize);
+    }
+
+    /* prepare metadata */
+    newFieldKeys[fieldCount] = key;
+    newFieldTypes[fieldCount] = NEO_AA_FIELD_TYPE_STRING;
+    newFieldValues[fieldCount] = newFieldValue;
+    newFieldKeySizes[fieldCount] = stringSize;
+
+    /* commit after all allocations and copies have succeeded */
+    free(header->encodedData);
+    free(header->fieldKeys);
+    free(header->fieldTypes);
+    free(header->fieldValues);
+    free(header->fieldKeySizes);
+
+    header->encodedData = newEncodedData;
+    header->fieldKeys = newFieldKeys;
+    header->fieldTypes = newFieldTypes;
+    header->fieldValues = newFieldValues;
+    header->fieldKeySizes = newFieldKeySizes;
+    header->headerSize = newSize;
+    header->fieldCount = fieldCount + 1;
+    return 0;
+}
+
+/* Currently marked as internal as they have not yet been added to the main library, but it is planned */
+NEO_INTERNAL_API int neo_aa_header_set_field_string_err(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return -1;
+    }
+    /* TODO: This function will call assert if fail! Bad! Make a new one later. */
+    internal_do_not_call_is_field_key_available(key);
+
+    if (stringSize > USHRT_MAX || (stringSize > 0 && !s)) {
+        NEO_AA_LogError("invalid string size or NULL string\n");
+        return -1;
+    }
+
     int keyIndex = neo_aa_header_get_field_key_index(header, key);
+
     if (keyIndex == -1) {
         /*
          * We mark neo_aa_header_add_field_string deprecated for user
@@ -608,140 +708,233 @@ void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t str
          */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        neo_aa_header_add_field_string(header, key, stringSize, s);
+        return neo_aa_header_add_field_string(header, key, stringSize, s);
 #pragma GCC diagnostic pop
-        return;
     }
 
-    size_t oldStringSize = neo_aa_header_get_field_size(header, keyIndex);
-    size_t oldAllocationSize = oldStringSize;
-    if (NEO_AA_FIELD_TYPE_STRING == header->fieldTypes[keyIndex]) {
-        oldAllocationSize += 2;
+    if (!header->encodedData) {
+        NEO_AA_LogError("header missing encoded data\n");
+        return -1;
     }
 
-    size_t newAllocationSize = stringSize + 2;
+    size_t oldSize = header->headerSize;
+    size_t oldValueSize = header->fieldKeySizes[keyIndex];
 
-    uint64_t fieldKeyEncodedDataPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
-    if (!fieldKeyEncodedDataPos) {
+    /*
+     * String fields contain:
+     * 4 bytes: key and subtype
+     * 2 bytes: string length
+     * N bytes: string data
+     *
+     * Other field types contain:
+     * 4 bytes: key and subtype
+     * N bytes: field data
+     */
+    size_t oldPrefixSize = header->fieldTypes[keyIndex] == NEO_AA_FIELD_TYPE_STRING ? 2 : 0;
+
+    size_t oldFieldSize = 4 + oldPrefixSize + oldValueSize;
+    size_t newFieldSize = 6 + stringSize;
+
+    /* Find the field's position in the encoded header. */
+    uint64_t fieldPos = internal_do_not_call_neo_aa_archive_header_key_pos_in_encoded_data(header, keyIndex);
+
+    if (!fieldPos) {
         NEO_AA_LogError("failed to find position of key in encoded data\n");
-        return;
+        return -1;
     }
 
-    char *encodedData = header->encodedData;
-
-    /* Check for overflow */
-    if (newAllocationSize > oldAllocationSize) {
-        /* Need to reallocate the encodedData to fit the new string size */
-        size_t oldSize = header->headerSize;
-        size_t newSize = oldSize + (newAllocationSize - oldAllocationSize);
-
-        char *newEncodedData = realloc(encodedData, newSize);
-        if (!newEncodedData) {
-            NEO_AA_ErrorHeapAlloc();
-            return;
-        }
-
-        header->encodedData = newEncodedData;
-        header->headerSize = newSize;
-
-        /* Ensure that the moveSize is non-negative before calling memmove */
-        size_t moveSize = oldSize - (fieldKeyEncodedDataPos + 4 + oldAllocationSize);
-
-        if (moveSize > 0) {
-            memmove(newEncodedData + fieldKeyEncodedDataPos + 4 + newAllocationSize,
-                newEncodedData + fieldKeyEncodedDataPos + 4 + oldAllocationSize,
-                moveSize);
-        }
-
-        encodedData = newEncodedData;
+    if (fieldPos > oldSize || oldFieldSize > oldSize - (size_t)fieldPos) {
+        NEO_AA_LogError("invalid encoded field bounds\n");
+        return -1;
     }
 
-    uint16_t stringSizeDowncast = (uint16_t)stringSize;
-    memcpy(encodedData + fieldKeyEncodedDataPos + 4, &stringSizeDowncast, 2);
+    /* calculate new header size */
+    size_t remainingSize = oldSize - oldFieldSize;
 
-    if (stringSize > 0) {
-        memcpy(encodedData + fieldKeyEncodedDataPos + 6, s, stringSize);
+    if (newFieldSize > UINT16_MAX - remainingSize) {
+        NEO_AA_LogError("header exceeds maximum encoded size\n");
+        return -1;
     }
 
-    header->fieldKeySizes[keyIndex] = stringSize;
+    size_t newSize = remainingSize + newFieldSize;
 
-    free(header->fieldValues[keyIndex]);
+    /*
+     * Allocate replacement buffers independently.
+     * Nothing in the original header is modified yet.
+     */
+    char *newEncodedData = malloc(newSize);
 
     char *newFieldValue = NULL;
+
     if (stringSize > 0) {
         newFieldValue = malloc(stringSize);
-        if (!newFieldValue) {
-            NEO_AA_ErrorHeapAlloc();
-            return;
-        }
-        strncpy(newFieldValue, s, stringSize);
-        /* libAppleArchive doesn't NULL terminate the string so I won't here */
     }
 
-    header->fieldValues[keyIndex] = newFieldValue;
+    if (!newEncodedData || (stringSize > 0 && !newFieldValue)) {
+        free(newEncodedData);
+        free(newFieldValue);
+        NEO_AA_ErrorHeapAlloc();
+        return -1;
+    }
 
-    if (header->fieldTypes[keyIndex] != NEO_AA_FIELD_TYPE_STRING) {
-        header->fieldTypes[keyIndex] = NEO_AA_FIELD_TYPE_STRING;
-    }
-}
+    size_t position = (size_t)fieldPos;
 
-NEO_INTERNAL_API static void neo_aa_header_add_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
-    NEO_AA_NullParamAssert(header);
-    internal_do_not_call_is_field_key_available(key);
-    NEO_AA_NullParamAssert(internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize));
-    size_t oldSize = header->headerSize;
-    size_t newSize = oldSize + 4 + fieldSize;
-    if (newSize > UINT16_MAX) {
-        NEO_AA_LogError("header exceeds maximum encoded size\n");
-        return;
+    /*
+     * Copy everything before the field, including its
+     * four-byte key and subtype.
+     */
+    memcpy(newEncodedData, header->encodedData, position + 4);
+
+    /* Update the field subtype to string */
+    newEncodedData[position + 3] = 'P';
+
+    /* Write the new 16-bit string length */
+    uint16_t encodedStringSize = (uint16_t)stringSize;
+
+    memcpy(newEncodedData + position + 4, &encodedStringSize, sizeof(encodedStringSize));
+
+    /* Copy the replacement string */
+    if (stringSize > 0) {
+        memcpy(newEncodedData + position + 6, s, stringSize);
+        memcpy(newFieldValue, s, stringSize);
     }
-    char *encodedData = header->encodedData;
-    uint32_t fieldCount = header->fieldCount;
-    char *newEncodedData = realloc(encodedData, newSize);
-    if (!newEncodedData) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
+
+    /*
+     * Move all subsequent encoded fields.
+     *
+     * This works for both growing and shrinking because
+     * the destination is calculated from the new field size.
+     */
+    size_t oldTailPosition = position + oldFieldSize;
+    size_t newTailPosition = position + newFieldSize;
+    size_t tailSize = oldSize - oldTailPosition;
+
+    if (tailSize > 0) {
+        memmove(newEncodedData + newTailPosition, header->encodedData + oldTailPosition, tailSize);
     }
-    uint32_t *newFieldKeys = realloc(header->fieldKeys, (fieldCount + 1) * sizeof(uint32_t));
-    if (!newFieldKeys) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    char *newFieldTypes = realloc(header->fieldTypes, fieldCount + 1);
-    if (!newFieldTypes) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    void **newFieldValues = realloc(header->fieldValues, (fieldCount + 1) * sizeof(void*));
-    if (!newFieldValues) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    size_t *fieldKeySizes = realloc(header->fieldKeySizes, (fieldCount + 1) * sizeof(size_t));
-    if (!fieldKeySizes) {
-        NEO_AA_ErrorHeapAlloc();
-        return;
-    }
-    uint16_t newSizeDowncast = (uint16_t)newSize;
-    /* Update encodedData with new size */
-    memcpy(newEncodedData + 4, &newSizeDowncast, 2);
-    uint32_t dumbPatchworkFix = FLIP_32(key);
-    memcpy(newEncodedData + oldSize, &dumbPatchworkFix, 4);
-    newEncodedData[oldSize + 3] = internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize);
-    memcpy(newEncodedData + oldSize + 4, &value, fieldSize);
+
+    /* update the encoded header size */
+    uint16_t encodedHeaderSize = (uint16_t)newSize;
+
+    memcpy(newEncodedData + 4, &encodedHeaderSize, sizeof(encodedHeaderSize));
+
+    /*
+     * Everything has succeeded.
+     * We can now safely replace the original buffers.
+     */
+    free(header->encodedData);
+    free(header->fieldValues[keyIndex]);
+
     header->encodedData = newEncodedData;
     header->headerSize = newSize;
-    fieldKeySizes[fieldCount] = fieldSize;
-    uint64_t *fieldValue = malloc(sizeof(time_t));
-    *fieldValue = value;
-    newFieldValues[fieldCount] = fieldValue;
-    newFieldTypes[fieldCount] = NEO_AA_FIELD_TYPE_TIMESPEC;
+
+    header->fieldValues[keyIndex] = newFieldValue;
+    header->fieldKeySizes[keyIndex] = stringSize;
+    header->fieldTypes[keyIndex] = NEO_AA_FIELD_TYPE_STRING;
+    return 0;
+}
+
+void neo_aa_header_set_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s) {
+    NEO_AA_NullParamAssert(header);
+    neo_aa_header_set_field_string_err(header, key, stringSize, s);
+}
+
+NEO_INTERNAL_API static int neo_aa_header_add_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {
+    if (!header) {
+        NEO_AA_LogError("header is NULL\n");
+        return -1;
+    }
+    internal_do_not_call_is_field_key_available(key);
+
+    if (internal_do_not_call_is_field_type_supported_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize) == 0) {
+        return -1;
+    }
+
+    if (header->headerSize > UINT16_MAX - 4 - fieldSize ||
+        header->fieldCount == UINT32_MAX) {
+        NEO_AA_LogError("header exceeds maximum encoded size\n");
+        return -1;
+    }
+
+    size_t oldSize = header->headerSize;
+    size_t newSize = oldSize + 4 + fieldSize;
+    uint32_t fieldCount = header->fieldCount;
+
+    if (!header->encodedData) {
+        NEO_AA_LogError("header missing encoded data\n");
+        return -1;
+    }
+
+    /* Allocate all replacement buffers. */
+    char *newEncodedData = malloc(newSize);
+    uint32_t *newFieldKeys = malloc((fieldCount + 1) * sizeof(uint32_t));
+    char *newFieldTypes = malloc(fieldCount + 1);
+    void **newFieldValues = malloc((fieldCount + 1) * sizeof(void *));
+    size_t *newFieldKeySizes = malloc((fieldCount + 1) * sizeof(size_t));
+    void *newFieldValue = calloc(1, fieldSize);
+
+    if (!newEncodedData || !newFieldKeys || !newFieldTypes || !newFieldValues || !newFieldKeySizes || !newFieldValue) {
+
+        free(newEncodedData);
+        free(newFieldKeys);
+        free(newFieldTypes);
+        free(newFieldValues);
+        free(newFieldKeySizes);
+        free(newFieldValue);
+
+        NEO_AA_ErrorHeapAlloc();
+        return -1;
+    }
+
+    /* copy existing data */
+    memcpy(newEncodedData, header->encodedData, oldSize);
+
+    if (fieldCount) {
+        memcpy(newFieldKeys, header->fieldKeys, fieldCount * sizeof(uint32_t));
+        memcpy(newFieldTypes, header->fieldTypes, fieldCount);
+        memcpy(newFieldValues, header->fieldValues, fieldCount * sizeof(void *));
+        memcpy(newFieldKeySizes, header->fieldKeySizes, fieldCount * sizeof(size_t));
+    }
+
+    /* encode the new field */
+    uint16_t encodedSize = (uint16_t)newSize;
+    memcpy(newEncodedData + 4, &encodedSize, sizeof(encodedSize));
+
+    uint32_t encodedKey = FLIP_32(key);
+    memcpy(newEncodedData + oldSize, &encodedKey, sizeof(encodedKey));
+
+    newEncodedData[oldSize + 3] = internal_do_not_call_neo_aa_header_subtype_for_field_type_and_size(NEO_AA_FIELD_TYPE_TIMESPEC, fieldSize);
+
+    /*
+     * avoid reading beyond time_t if fieldSize is larger
+     * than sizeof(time_t).
+     */
+    size_t copySize = fieldSize < sizeof(value) ? fieldSize : sizeof(value);
+
+    memcpy(newEncodedData + oldSize + 4, &value, copySize);
+    memcpy(newFieldValue, &value, copySize);
+
+    /* prepare metadata */
     newFieldKeys[fieldCount] = key;
-    header->fieldCount = fieldCount + 1;
-    header->fieldValues = newFieldValues;
+    newFieldTypes[fieldCount] = NEO_AA_FIELD_TYPE_TIMESPEC;
+    newFieldValues[fieldCount] = newFieldValue;
+    newFieldKeySizes[fieldCount] = fieldSize;
+
+    /* commit after all allocations have succeeded */
+    free(header->encodedData);
+    free(header->fieldKeys);
+    free(header->fieldTypes);
+    free(header->fieldValues);
+    free(header->fieldKeySizes);
+
+    header->encodedData = newEncodedData;
     header->fieldKeys = newFieldKeys;
     header->fieldTypes = newFieldTypes;
-    header->fieldKeySizes = fieldKeySizes;
+    header->fieldValues = newFieldValues;
+    header->fieldKeySizes = newFieldKeySizes;
+    header->headerSize = newSize;
+    header->fieldCount = fieldCount + 1;
+    return 0;
 }
 
 void neo_aa_header_set_field_timespec(NeoAAHeader header, uint32_t key, size_t fieldSize, time_t value) {

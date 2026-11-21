@@ -97,8 +97,9 @@ typedef NeoAAFieldType NeoFieldType;
 #endif
 
 void neo_aa_header_set_field_uint(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t value);
-void neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s);
 void neo_aa_header_set_field_blob(NeoAAHeader header, uint32_t key, size_t fieldSize, uint64_t blobSize);
+
+int __attribute__((deprecated)) neo_aa_header_add_field_string(NeoAAHeader header, uint32_t key, size_t stringSize, char *s); /* Please use neo_aa_header_set_field_string instead, defined in neo_aa_header.h */
 
 NeoAAArchiveItem neo_aa_archive_item_create_with_header(NeoAAHeader header);
 NeoAAArchiveItem neo_aa_archive_item_create_with_header_copy(NeoAAHeader header);

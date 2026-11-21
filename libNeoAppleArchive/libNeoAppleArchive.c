@@ -209,7 +209,7 @@ size_t neo_aa_archive_plain_outfile_size(NeoAAArchivePlain plainArchive) {
     return outfileSize;
 }
 
-#include 0 /* TODO: Not yet complete */
+#if 0 /* TODO: Not yet complete */
 uint64_t neo_aa_archive_plain_outfile_size64(NeoAAArchivePlain plainArchive) {
     uint64_t outfileSize = 0;
     int itemCount = plainArchive->itemCount;
@@ -1275,13 +1275,13 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
     if (fseeko(fp, 0, SEEK_END) != 0) {
         NEO_AA_LogError("reached SEEK_END\n");
         fclose(fp);
-        return NULL;
+        return -1;
     }
     off_t fileSize = ftello(fp);
     if (fileSize < 0 || fseeko(fp, 0, SEEK_SET) != 0) {
         NEO_AA_LogError("file size is smaller\n");
         fclose(fp);
-        return NULL;
+        return -1;
     }
     uint64_t appleArchiveSize = (uint64_t)fileSize;
     uint8_t *appleArchive = malloc(appleArchiveSize);
@@ -1293,7 +1293,7 @@ int neo_aa_extract_aar_to_path_err(const char *archivePath, const char *outputPa
     fclose(fp);
     if (bytesRead < appleArchiveSize) {
         free(appleArchive);
-        NEO_AA_LogErrorF("failed to read the entire file (read %zu bytes, expected %zu).\n",bytesRead, appleArchiveSize);
+        NEO_AA_LogErrorF("failed to read the entire file (read %zu bytes, expected %llu).\n",bytesRead, appleArchiveSize);
         return -2;
     }
     uint32_t headerMagic;
