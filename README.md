@@ -4,12 +4,14 @@ Cross-compat library for parsing Apple Archive and Apple Encrypted Archive.
 ### What it features
 Functions for messing around with headers, extracting, and archiving apple archives. There are functions for manually creating apple archives (or modifying existing ones), as well as convienience functions. YAA is also supported, as it is just legacy Apple Archive, and all YAA files are just Apple Archives with a different magic essentially.
 
+### Documentation
+
+Check out the new (very unfinished, FYI) documentation website for libNeoAppleArchive: [https://idjmobile.com/docs/libNeoAppleArchive/](https://idjmobile.com/docs/libNeoAppleArchive/). This covers a good getting started into the library, and soon should cover everything does in docs/.
+
 ### Roadmap
 - [ ] Support all compression types for Apple Archive (partially complete)
-- - Only LZ4 and LZMA are needed now.
 - [x] Support AEA, at least the `AEA_PROFILE__HKDF_SHA256_HMAC__NONE__ECDSA_P256` and `AEA_PROFILE__HKDF_SHA256_AESCTR_HMAC__SYMMETRIC__NONE` profiles.
 - [x] Convienience functions for archiving / extracting files and directories.
-- [ ] Making code more readable
 - [ ] Multi-threadded support
 - [ ] GUI for Windows/macOS/Linux
 - [ ] CommonCrypto variants for macOS to allow use without OpenSSL.
@@ -26,7 +28,7 @@ Any/all contributions are welcome, no matter how small or large!
 
 If you are currently unsure of what to contribute, here are some easy targets:
 
-- Implementing LZ4 and LZMA should be easy. Just keep in mind to maintain Linux support with this. I'll test on BSD myself so you don't need to worry too bad about it.
+- Implementing LZ4, LZMA, and LZVN should be easy. Just keep in mind to maintain Linux support with this. I'll test on BSD myself so you don't need to worry too bad about it.
 - Include Swift Package Manager support
 - Some functions do not have docs or could use better documentation, as well as no good "welcome to the library!" doc which just generally shows how to use the library.
 - The current Makefile isn't so great and only outputs builds for the current platform the user is running on. Rah! Bad! This should be changed.
